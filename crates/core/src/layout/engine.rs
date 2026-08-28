@@ -38,19 +38,46 @@ pub const DEFAULT_FONT_SIZE: Unit<Ratio<Px, Em>> = Unit::new(16.);
 ///
 /// Font size and layout style have default values so only the font is required to create this struct.
 pub struct LayoutBuilder<'f, F> {
-    font: &'f F,
+    fonts: [&'f F; 4],
+    scales: Option<[f64; 4]>,
     font_size: Unit<Ratio<Px, Em>>,
     style: Style,
 }
 
+/// Index into the per-level font/metrics arrays: display, text, script, scriptscript.
+pub(crate) fn level(style: Style) -> usize {
+    match style {
+        Style::Display | Style::DisplayCramped => 0,
+        Style::Text | Style::TextCramped => 1,
+        Style::Script | Style::ScriptCramped => 2,
+        Style::ScriptScript | Style::ScriptScriptCramped => 3,
+    }
+}
+
 impl<'f, F> LayoutBuilder<'f, F> {
-    /// Creates a new [`LayoutEngineBuilder`].
-    pub fn new(font: &'f F) -> Self {
+    /// Creates a builder with one font per math level: `[display, text, script, scriptscript]`.
+    /// Each level draws its glyphs from, and reads its MATH constants from, its own font.
+    /// Glyph scale per level defaults to `[1, 1, ScriptPercentScaleDown,
+    /// ScriptScriptPercentScaleDown]` of the *text* font; see [`LayoutBuilder::scales`].
+    pub fn new(fonts: [&'f F; 4]) -> Self {
         Self {
-            font,
+            fonts,
+            scales: None,
             font_size: DEFAULT_FONT_SIZE,
             style: Style::default(),
         }
+    }
+
+    /// Overrides the glyph scale per level (display, text, script, scriptscript), e.g.
+    /// `[1.0, 1.0, 0.7, 0.5]` for TeX's 10/7/5 pt.
+    pub fn scales(mut self, scales: [f64; 4]) -> Self {
+        self.scales = Some(scales);
+        self
+    }
+
+    /// Creates a builder using `font` for every level (standard single-font behaviour).
+    pub fn single(font: &'f F) -> Self {
+        Self::new([font; 4])
     }
 
     /// Sets the font size in user units per em (the unit of every coordinate in the resulting layout).
@@ -70,13 +97,15 @@ impl<'f, F: MathFont> LayoutBuilder<'f, F> {
     /// Creates a new LayoutEngine. The [`LayoutEngine`] may be used to lay out multiple formula with the same format.
     pub fn build(self) -> LayoutEngine<'f, F> {
         let Self {
-            font,
+            fonts,
+            scales,
             font_size,
             style,
         } = self;
 
         LayoutEngine::new(
-            font,
+            fonts,
+            scales,
             LayoutContext {
                 style,
                 font_size,
@@ -98,14 +127,17 @@ impl<'f, F: MathFont> LayoutBuilder<'f, F> {
 // cf discussion here: https://stegosaurusdormant.com/understanding-derive-clone/
 /// Defines the math font to use, the desired font size and whether to use Roman or Italic or various other scripts
 pub struct LayoutEngine<'f, F> {
-    /// Maths font
-    font: &'f F,
+    /// One font per level (display, text, script, scriptscript); may repeat.
+    fonts: [&'f F; 4],
 
     /// The context at beginning of layout as defined by the user
     starting_context: LayoutContext,
 
-    /// Contains frequently used constants from the font
-    metrics_cache: FontMetricsCache,
+    /// MATH constants and units-per-em, per level.
+    metrics: [FontMetricsCache; 4],
+
+    /// Glyph scale per level (display, text, script, scriptscript).
+    scales: [f64; 4],
 }
 
 /// Contains every element of state that may change during the layout, i.e. font size or display style
@@ -121,32 +153,68 @@ pub struct LayoutContext {
 
 impl<F> Clone for LayoutEngine<'_, F> {
     fn clone(&self) -> Self {
-        let Self {
-            font,
-            metrics_cache,
-            starting_context,
-        } = self;
         Self {
-            font,
-            metrics_cache: metrics_cache.clone(),
-            starting_context: *starting_context,
+            fonts: self.fonts,
+            metrics: self.metrics.clone(),
+            scales: self.scales,
+            starting_context: self.starting_context,
         }
     }
 }
 
-impl<F> LayoutEngine<'_, F> {
-    /// Access constants associated with font
-    pub fn metrics_cache(&self) -> &FontMetricsCache {
-        &self.metrics_cache
+impl<'f, F> LayoutEngine<'f, F> {
+    /// The font used for `style`'s level.
+    pub fn font_at(&self, style: Style) -> &'f F {
+        self.fonts[level(style)]
+    }
+
+    /// The fonts per level: display, text, script, scriptscript.
+    pub fn fonts(&self) -> [&'f F; 4] {
+        self.fonts
+    }
+
+    /// MATH constants and units-per-em of the font used for `style`'s level.
+    pub fn metrics_at(&self, style: Style) -> &FontMetricsCache {
+        &self.metrics[level(style)]
+    }
+
+    /// MATH constants of the font used for `style`'s level.
+    pub fn constants_at(&self, style: Style) -> &crate::font::FontConstants {
+        self.metrics[level(style)].constants()
+    }
+
+    /// Glyph scale applied at `style`'s level (see [`LayoutBuilder::new`]).
+    pub fn scale_at(&self, style: Style) -> f64 {
+        self.scales[level(style)]
     }
 }
 
 impl<'f, F: MathFont> LayoutEngine<'f, F> {
-    /// Creates new layout engine from font and starting context
-    fn new(font: &'f F, starting_context: LayoutContext) -> Self {
+    /// Creates new layout engine from fonts and starting context
+    fn new(fonts: [&'f F; 4], scales: Option<[f64; 4]>, starting_context: LayoutContext) -> Self {
+        let metrics = [
+            FontMetricsCache::new(fonts[0]),
+            FontMetricsCache::new(fonts[1]),
+            FontMetricsCache::new(fonts[2]),
+            FontMetricsCache::new(fonts[3]),
+        ];
+        // Script sizes are a property of the level, not of the font drawn at that level:
+        // an optical-size cut keeps its em, it only changes the design. So every level
+        // scales by the text font's ScriptPercentScaleDown / ScriptScriptPercentScaleDown
+        // unless the caller supplies explicit scales.
+        let scales = scales.unwrap_or_else(|| {
+            let c = metrics[1].constants();
+            [
+                1.0,
+                1.0,
+                c.script_percent_scale_down,
+                c.script_script_percent_scale_down,
+            ]
+        });
         Self {
-            font,
-            metrics_cache: FontMetricsCache::new(font),
+            fonts,
+            metrics,
+            scales,
             starting_context,
         }
     }
@@ -242,11 +310,6 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         }
 
         Ok(layout.finalize())
-    }
-
-    /// Access the underlying font used
-    pub fn font(&self) -> &'f F {
-        self.font
     }
 }
 
@@ -362,7 +425,11 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                             Spacing::Medium.to_length().to_px(self, context),
                         ));
                     } else {
-                        to_return.push(self.font.glyph(character)?.as_layout(self, context)?);
+                        to_return.push(
+                            self.font_at(context.style)
+                                .glyph(character)?
+                                .as_layout(self, context)?,
+                        );
                     }
                 }
                 to_return
@@ -381,7 +448,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         }
 
         let glyph_gid = self
-            .font()
+            .font_at(context.style)
             .glyph_index(sym.codepoint)
             .ok_or(FontError::MissingGlyphCodepoint(sym.codepoint))?;
 
@@ -390,11 +457,14 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
             // if in script mode, we perform substitutions
             .script_level()
             // only if said substitutions exist for glyph
-            .and_then(|script_level| self.font.glyph_script_alternate(glyph_gid, script_level))
+            .and_then(|script_level| {
+                self.font_at(context.style)
+                    .glyph_script_alternate(glyph_gid, script_level)
+            })
             // otherwise, use glyph_id from previous step
             .unwrap_or(glyph_gid);
 
-        self.font()
+        self.font_at(context.style)
             // create the glyph
             .glyph_from_gid(substitute_gid)?
             // turn it into a `LayoutNode`
@@ -405,10 +475,10 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
     fn underline(&self, node: LayoutNode<'f, F>, context: LayoutContext) -> LayoutNode<'f, F> {
         let width = node.width;
         let depth = node.depth;
-        let clearance = self.metrics_cache.constants().underbar_vertical_gap * context.font_size;
-        let thick = self.metrics_cache.constants().underbar_rule_thickness * context.font_size;
+        let clearance = self.constants_at(context.style).underbar_vertical_gap * context.font_size;
+        let thick = self.constants_at(context.style).underbar_rule_thickness * context.font_size;
         let extra_descender =
-            self.metrics_cache.constants().underbar_extra_descender * context.font_size;
+            self.constants_at(context.style).underbar_extra_descender * context.font_size;
         let mut vbox = layout::builders::VBox::new();
         vbox.add_node(node);
         vbox.add_node(LayoutNode::vert_kern(clearance - depth));
@@ -419,19 +489,18 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
     }
 
     fn largeop(&self, sym: Symbol, context: LayoutContext) -> LayoutResult<LayoutNode<'f, F>> {
-        let glyph = self.font.glyph(sym.codepoint)?;
+        let glyph = self.font_at(context.style).glyph(sym.codepoint)?;
         if context.style > Style::Text {
             let axis_offset = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .axis_height
                 .to_px(self, context);
             let largeop = self
-                .font
+                .font_at(context.style)
                 .vert_variant(
                     glyph.gid,
-                    self.metrics_cache.constants().display_operator_min_height
-                        * self.metrics_cache.units_per_em(),
+                    self.constants_at(context.style).display_operator_min_height
+                        * self.metrics_at(context.style).units_per_em(),
                 )
                 .as_layout(self, context)?;
             let shift = (largeop.height + largeop.depth).scale(0.5) - axis_offset;
@@ -448,10 +517,10 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // [x] WideAccent vs Accent: Don't expand Accent types.
         let base = self.layout_with(&acc.nucleus, context.cramped())?;
         let symbol = &acc.symbol;
-        let glyph = self.font.glyph(symbol.codepoint)?;
+        let glyph = self.font_at(context.style).glyph(symbol.codepoint)?;
         let accent_variant = if acc.extend {
-            self.font
-                .horz_variant(glyph.gid, self.to_font(base.width, context.font_size))
+            self.font_at(context.style)
+                .horz_variant(glyph.gid, self.to_font(base.width, context))
         }
         // to not extend, we consider the trivial variant glyph where the glyph itself is used as replacement
         else {
@@ -466,7 +535,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         //      2. Otherwise: (width + ic) / 2.0
         let base_offset = match layout::is_symbol(&base.contents) {
             Some(sym) => {
-                let glyph = self.font.glyph_from_gid(sym.gid)?;
+                let glyph = self.font_at(context.style).glyph_from_gid(sym.gid)?;
                 if !glyph.attachment.is_zero() {
                     glyph.attachment.to_px(self, context)
                 } else {
@@ -479,7 +548,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         let acc_offset = match accent_variant {
             VariantGlyph::Replacement(sym) => {
-                let glyph = self.font.glyph_from_gid(sym)?;
+                let glyph = self.font_at(context.style).glyph_from_gid(sym)?;
                 if !glyph.attachment.is_zero() {
                     glyph.attachment.to_px(self, context)
                 } else {
@@ -542,8 +611,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
             // an `x` character in the current style.
             let delta = -Unit::min(
                 base_height,
-                self.metrics_cache
-                    .constants()
+                self.constants_at(context.style)
                     .accent_base_height
                     .to_px(self, context),
             );
@@ -628,8 +696,11 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         if scripts.superscript.is_some() {
             // Use default font values for first iteration of vertical height.
             adjust_up = match context.style.is_cramped() {
-                true => self.metrics_cache.constants().superscript_shift_up_cramped,
-                false => self.metrics_cache.constants().superscript_shift_up,
+                true => {
+                    self.constants_at(context.style)
+                        .superscript_shift_up_cramped
+                }
+                false => self.constants_at(context.style).superscript_shift_up,
             }
             .to_px(self, context);
 
@@ -643,7 +714,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                         use crate::parser::is_symbol;
                         if let Some(sym) = is_symbol(&acc.nucleus) {
                             height = self
-                                .font()
+                                .font_at(context.style)
                                 .glyph(sym.codepoint)?
                                 .height()
                                 .to_px(self, context);
@@ -651,9 +722,9 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                     }
                     // Apply italics correction is base is a symbol
                     else if let Some(base_sym) = base.is_symbol() {
-                        let base_height = self.to_font(base.height, context.font_size);
+                        let base_height = self.to_font(base.height, context);
                         // TODO: shouldn't this be font_size of sperscript?
-                        let script_depth = self.to_font(sup.depth + adjust_up, context.font_size);
+                        let script_depth = self.to_font(sup.depth + adjust_up, context);
 
                         // Lookup font kerning of superscript
                         let kern = superscript_kern(&base, &sup, base_height, script_depth)?
@@ -664,15 +735,13 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
             }
 
             let drop_max = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .superscript_baseline_drop_max
                 .to_px(self, context);
             adjust_up = max!(
                 adjust_up,
                 height - drop_max,
-                self.metrics_cache
-                    .constants()
+                self.constants_at(context.style)
                     .superscript_bottom_min
                     .to_px(self, context)
                     - sup.depth
@@ -684,18 +753,15 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         if scripts.subscript.is_some() {
             // Use default font values for first iteration of vertical height.
             adjust_down = max!(
-                self.metrics_cache
-                    .constants()
+                self.constants_at(context.style)
                     .subscript_shift_down
                     .to_px(self, context),
                 sub.height
                     - self
-                        .metrics_cache
-                        .constants()
+                        .constants_at(context.style)
                         .subscript_top_max
                         .to_px(self, context),
-                self.metrics_cache
-                    .constants()
+                self.constants_at(context.style)
                     .subscript_baseline_drop_min
                     .to_px(self, context)
                     - base.depth
@@ -709,16 +775,16 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                         // This recently changed in LuaTeX.  See `nolimitsmode`.
                         // This needs to be the glyph information _after_ layout for base.
                         sub_kern = -self
-                            .font()
+                            .font_at(context.style)
                             .glyph_from_gid(base_sym.gid)?
                             .italics
                             .to_px(self, context);
                     }
                 }
 
-                let base_depth = self.to_font(base.depth, context.font_size);
+                let base_depth = self.to_font(base.depth, context);
                 // TODO: shouldn't this be font_size of subscript?
-                let script_height = self.to_font(sub.height + adjust_down, context.font_size);
+                let script_height = self.to_font(sub.height + adjust_down, context);
                 sub_kern +=
                     subscript_kern(&base, &sub, base_depth, script_height)?.to_px(self, context);
             }
@@ -729,8 +795,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
             let sup_bot = adjust_up + sup.depth;
             let sub_top = sub.height - adjust_down;
             let gap_min = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .sub_superscript_gap_min
                 .to_px(self, context);
             if sup_bot - sub_top < gap_min {
@@ -782,23 +847,19 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // Next we calculate the kerning required to separate the superscript
         // and subscript (respectively) from the base.
         let sup_kern = Unit::max(
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .upper_limit_baseline_rise_min
                 .to_px(self, context),
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .upper_limit_gap_min
                 .to_px(self, context)
                 - sup.depth,
         );
         let sub_kern = Unit::max(
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .lower_limit_gap_min
                 .to_px(self, context),
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .lower_limit_baseline_drop_min
                 .to_px(self, context)
                 - sub.height,
@@ -853,8 +914,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         let bar = match frac.bar_thickness {
             BarThickness::Default => self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_rule_thickness
                 .to_px(self, frac_context),
             BarThickness::None => Unit::ZERO,
@@ -876,8 +936,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         let denom = d.as_node();
 
         let axis = self
-            .metrics_cache
-            .constants()
+            .constants_at(context.style)
             .axis_height
             .to_px(self, frac_context);
         let shift_up;
@@ -887,44 +946,36 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         if frac_context.style > Style::Text {
             shift_up = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_numerator_display_style_shift_up
                 .to_px(self, frac_context);
             shift_down = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_denominator_display_style_shift_down
                 .to_px(self, frac_context);
             gap_num = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_num_display_style_gap_min
                 .to_px(self, frac_context);
             gap_denom = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_denom_display_style_gap_min
                 .to_px(self, frac_context);
         } else {
             shift_up = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_numerator_shift_up
                 .to_px(self, frac_context);
             shift_down = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_denominator_shift_down
                 .to_px(self, frac_context);
             gap_num = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_numerator_gap_min
                 .to_px(self, frac_context);
             gap_denom = self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .fraction_denominator_gap_min
                 .to_px(self, frac_context);
         }
@@ -943,8 +994,8 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         );
 
         let null_delimiter_space =
-            self.metrics_cache.constants().null_delimiter_space * frac_context.font_size;
-        let axis_height = self.metrics_cache.constants().axis_height * frac_context.font_size;
+            self.constants_at(context.style).null_delimiter_space * frac_context.font_size;
+        let axis_height = self.constants_at(context.style).axis_height * frac_context.font_size;
         // Enclose fraction with delimiters if provided, otherwise with a NULL_DELIMITER_SPACE.
         let left = match frac.left_delimiter {
             None => LayoutNode::horiz_kern(null_delimiter_space),
@@ -953,17 +1004,19 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                     Unit::max(inner.height - axis_height, axis_height - inner.depth).scale(2.0);
                 let clearance = Unit::max(
                     clearance,
-                    self.metrics_cache
-                        .constants()
+                    self.constants_at(context.style)
                         .delimited_sub_formula_min_height
                         * frac_context.font_size,
                 );
 
-                let glyph_id = self.font.glyph_index(sym.codepoint).ok_or(
-                    crate::error::FontError::MissingGlyphCodepoint(sym.codepoint),
-                )?;
-                self.font
-                    .vert_variant(glyph_id, self.to_font(clearance, frac_context.font_size))
+                let glyph_id = self
+                    .font_at(context.style)
+                    .glyph_index(sym.codepoint)
+                    .ok_or(crate::error::FontError::MissingGlyphCodepoint(
+                        sym.codepoint,
+                    ))?;
+                self.font_at(context.style)
+                    .vert_variant(glyph_id, self.to_font(clearance, frac_context))
                     .as_layout(self, frac_context)?
                     .centered(axis_height.to_px(self, frac_context))
             }
@@ -976,17 +1029,19 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                     Unit::max(inner.height - axis_height, axis_height - inner.depth).scale(2.0);
                 let clearance = Unit::max(
                     clearance,
-                    self.metrics_cache
-                        .constants()
+                    self.constants_at(context.style)
                         .delimited_sub_formula_min_height
                         * frac_context.font_size,
                 );
 
-                let glyph_id = self.font.glyph_index(sym.codepoint).ok_or(
-                    crate::error::FontError::MissingGlyphCodepoint(sym.codepoint),
-                )?;
-                self.font
-                    .vert_variant(glyph_id, self.to_font(clearance, frac_context.font_size))
+                let glyph_id = self
+                    .font_at(context.style)
+                    .glyph_index(sym.codepoint)
+                    .ok_or(crate::error::FontError::MissingGlyphCodepoint(
+                        sym.codepoint,
+                    ))?;
+                self.font_at(context.style)
+                    .vert_variant(glyph_id, self.to_font(clearance, frac_context))
                     .as_layout(self, frac_context)?
                     .centered(axis_height.to_px(self, frac_context))
             }
@@ -1012,25 +1067,21 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // and cache other sizes that will be needed
         let gap = match context.style >= Style::Display {
             true => self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .radical_display_style_vertical_gap
                 .to_px(self, context),
             false => self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .radical_vertical_gap
                 .to_px(self, context),
         };
 
         let rule_thickness = self
-            .metrics_cache
-            .constants()
+            .constants_at(context.style)
             .radical_rule_thickness
             .to_px(self, context);
         let rule_ascender = self
-            .metrics_cache
-            .constants()
+            .constants_at(context.style)
             .radical_extra_ascender
             .to_px(self, context);
 
@@ -1039,7 +1090,8 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         let sqrt = self
             .vert_variant_for_codepoint(
                 rad.character,
-                self.to_font(inner_height, context.font_size),
+                self.to_font(inner_height, context),
+                context.style,
             )?
             .as_layout(self, context)?;
 
@@ -1081,18 +1133,15 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
                 // Get radical degree positioning constants from font
                 let kern_before = self
-                    .metrics_cache
-                    .constants()
+                    .constants_at(context.style)
                     .radical_kern_before_degree
                     .to_px(self, context);
                 let kern_after = self
-                    .metrics_cache
-                    .constants()
+                    .constants_at(context.style)
                     .radical_kern_after_degree
                     .to_px(self, context);
                 let raise_percent = self
-                    .metrics_cache
-                    .constants()
+                    .constants_at(context.style)
                     .radical_degree_bottom_raise_percent;
 
                 // Calculate vertical raise: raise the degree so its bottom is at
@@ -1155,30 +1204,33 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         // The line gap will be taken from STACK_GAP constants
         let gap_min = if context.style > Style::Text {
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .stack_display_style_gap_min
                 .to_px(self, context)
         } else {
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .stack_gap_min
                 .to_px(self, context)
         };
 
         // No idea.
         let gap_try = if context.style > Style::Text {
-            self.metrics_cache
-                .constants()
+            self.constants_at(context.style)
                 .stack_top_display_style_shift_up
-                - self.metrics_cache.constants().axis_height
-                + self.metrics_cache.constants().stack_bottom_shift_down
-                - self.metrics_cache.constants().accent_base_height.scale(2.0)
+                - self.constants_at(context.style).axis_height
+                + self.constants_at(context.style).stack_bottom_shift_down
+                - self
+                    .constants_at(context.style)
+                    .accent_base_height
+                    .scale(2.0)
         } else {
-            self.metrics_cache.constants().stack_top_shift_up
-                - self.metrics_cache.constants().axis_height
-                + self.metrics_cache.constants().stack_bottom_shift_down
-                - self.metrics_cache.constants().accent_base_height.scale(2.0)
+            self.constants_at(context.style).stack_top_shift_up
+                - self.constants_at(context.style).axis_height
+                + self.constants_at(context.style).stack_bottom_shift_down
+                - self
+                    .constants_at(context.style)
+                    .accent_base_height
+                    .scale(2.0)
         }
         .to_px(self, context);
 
@@ -1199,8 +1251,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // Vertically center the stack to the axis
         let offset = (vbox.height + vbox.depth).scale(0.5)
             - self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .axis_height
                 .to_px(self, context);
         vbox.set_offset(offset);
@@ -1240,7 +1291,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         let double_rule_sep = DOUBLE_RULE_SEP * Unit::standard_pt_to_px();
 
         let null_delimiter_space =
-            self.metrics_cache.constants().null_delimiter_space * context.font_size;
+            self.constants_at(context.style).null_delimiter_space * context.font_size;
 
         // Don't bother constructing a new node if there is nothing.
         let num_rows = array.rows.len();
@@ -1475,8 +1526,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         let mut vbox = builders::VBox::new();
         let offset = height.scale(0.5)
             - self
-                .metrics_cache
-                .constants()
+                .constants_at(context.style)
                 .axis_height
                 .to_px(self, context);
         vbox.set_offset(offset);
@@ -1492,20 +1542,20 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // place delimiters in an hbox surrounding the matrix body
         let mut hbox = builders::HBox::new();
         let axis = self
-            .metrics_cache
-            .constants()
+            .constants_at(context.style)
             .axis_height
             .to_px(self, context);
         let clearance = Unit::max(
-            height.scale(self.metrics_cache.constants().delimiter_factor),
-            height - self.metrics_cache.constants().delimiter_short_fall * context.font_size,
+            height.scale(self.constants_at(context.style).delimiter_factor),
+            height - self.constants_at(context.style).delimiter_short_fall * context.font_size,
         );
 
         if let Some(left) = array.left_delimiter {
             let left = self
                 .vert_variant_for_codepoint(
                     left.codepoint,
-                    self.to_font(clearance, context.font_size),
+                    self.to_font(clearance, context),
+                    context.style,
                 )?
                 .as_layout(self, context)?
                 .centered(axis);
@@ -1517,7 +1567,8 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
             let right = self
                 .vert_variant_for_codepoint(
                     right.codepoint,
-                    self.to_font(clearance, context.font_size),
+                    self.to_font(clearance, context),
+                    context.style,
                 )?
                 .as_layout(self, context)?
                 .centered(axis);
@@ -1530,12 +1581,13 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         &self,
         codepoint: char,
         height: Unit<FUnit>,
+        style: Style,
     ) -> Result<VariantGlyph, FontError> {
-        let glyph_id = self
-            .font
+        let font = self.font_at(style);
+        let glyph_id = font
             .glyph_index(codepoint)
             .ok_or(FontError::MissingGlyphCodepoint(codepoint))?;
-        Ok(self.font.vert_variant(glyph_id, height))
+        Ok(font.vert_variant(glyph_id, height))
     }
 
     fn extend_delimiter(
@@ -1546,12 +1598,11 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         context: LayoutContext,
     ) -> LayoutResult<LayoutNode<'f, F>> {
         let min_height = self
-            .metrics_cache
-            .constants()
+            .constants_at(context.style)
             .delimited_sub_formula_min_height
             * context.font_size;
         let null_delimiter_space =
-            self.metrics_cache.constants().null_delimiter_space * context.font_size;
+            self.constants_at(context.style).null_delimiter_space * context.font_size;
 
         if symbol.codepoint == '.' {
             return Ok(LayoutNode::horiz_kern(null_delimiter_space));
@@ -1561,23 +1612,25 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         // TODO: This quick height check doesn't seem to be strong enough,
         // reference: http://tug.org/pipermail/luatex/2010-July/001745.html
         if Unit::max(height_content, -depth_content) > min_height.scale(0.5) {
-            let axis = self.metrics_cache.constants().axis_height * context.font_size;
+            let axis = self.constants_at(context.style).axis_height * context.font_size;
 
             let inner_size = Unit::max(height_content - axis, axis - depth_content).scale(2.0);
             let clearance_px = Unit::max(
-                inner_size.scale(self.metrics_cache.constants().delimiter_factor),
+                inner_size.scale(self.constants_at(context.style).delimiter_factor),
                 height_content
                     - depth_content
-                    - self.metrics_cache.constants().delimiter_short_fall * context.font_size,
+                    - self.constants_at(context.style).delimiter_short_fall * context.font_size,
             );
-            let clearance = self.to_font(clearance_px, context.font_size);
+            let clearance = self.to_font(clearance_px, context);
 
             Ok(self
-                .vert_variant_for_codepoint(symbol.codepoint, clearance)?
+                .vert_variant_for_codepoint(symbol.codepoint, clearance, context.style)?
                 .as_layout(self, context)?
                 .centered(axis))
         } else {
-            self.font.glyph(symbol.codepoint)?.as_layout(self, context)
+            self.font_at(context.style)
+                .glyph(symbol.codepoint)?
+                .as_layout(self, context)
         }
     }
 }

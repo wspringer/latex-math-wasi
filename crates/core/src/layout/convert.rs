@@ -1,6 +1,6 @@
 //! This is a collection of tools used for converting ParseNodes into LayoutNodes.
 
-use crate::dimensions::units::{Em, FUnit, Px, Ratio};
+use crate::dimensions::units::{Em, FUnit, Px};
 use crate::dimensions::{AnyUnit, Unit};
 use crate::font::{Direction, Glyph, MathFont, VariantGlyph};
 
@@ -64,7 +64,7 @@ impl<'f, F: MathFont> AsLayoutNode<'f, F> for VariantGlyph {
     ) -> LayoutResult<LayoutNode<'f, F>> {
         match *self {
             VariantGlyph::Replacement(gid) => {
-                let glyph = engine.font().glyph_from_gid(gid)?;
+                let glyph = engine.font_at(context.style).glyph_from_gid(gid)?;
                 glyph.as_layout(engine, context)
             }
 
@@ -72,7 +72,7 @@ impl<'f, F: MathFont> AsLayoutNode<'f, F> for VariantGlyph {
                 Direction::Vertical => {
                     let mut contents = builders::VBox::new();
                     for instr in parts.iter().rev() {
-                        let glyph = engine.font().glyph_from_gid(instr.gid)?;
+                        let glyph = engine.font_at(context.style).glyph_from_gid(instr.gid)?;
                         contents.add_node(glyph.as_layout(engine, context)?);
                         if instr.overlap != 0 {
                             let overlap = Unit::<FUnit>::new(instr.overlap.into());
@@ -87,7 +87,7 @@ impl<'f, F: MathFont> AsLayoutNode<'f, F> for VariantGlyph {
                 Direction::Horizontal => {
                     let mut contents = builders::HBox::new();
                     for instr in parts {
-                        let glyph = engine.font().glyph_from_gid(instr.gid)?;
+                        let glyph = engine.font_at(context.style).glyph_from_gid(instr.gid)?;
                         if instr.overlap != 0 {
                             let kern =
                                 -Unit::<FUnit>::new(instr.overlap.into()).to_px(engine, context);
@@ -105,27 +105,19 @@ impl<'f, F: MathFont> AsLayoutNode<'f, F> for VariantGlyph {
 
 impl<F> LayoutEngine<'_, F> {
     fn scale_factor(&self, style: Style) -> f64 {
-        match style {
-            Style::Display | Style::DisplayCramped | Style::Text | Style::TextCramped => 1.0,
-
-            Style::Script | Style::ScriptCramped => {
-                self.metrics_cache().constants().script_percent_scale_down
-            }
-
-            Style::ScriptScript | Style::ScriptScriptCramped => {
-                self.metrics_cache()
-                    .constants()
-                    .script_script_percent_scale_down
-            }
-        }
-    }
-    fn scale_font_unit(&self, length: Unit<FUnit>, font_size: Unit<Ratio<Px, Em>>) -> Unit<Px> {
-        length * (font_size / self.metrics_cache().units_per_em()).unlift()
+        self.scale_at(style)
     }
 
-    /// Convert a length given in pixels to a length in font units. The resulting value depends on the selected font size.
-    pub(super) fn to_font(&self, length: Unit<Px>, font_size: Unit<Ratio<Px, Em>>) -> Unit<FUnit> {
-        length * (self.metrics_cache().units_per_em() / font_size).unlift()
+    /// Font units of the level's font → user units, at the level's font size and scale.
+    fn scale_font_unit(&self, length: Unit<FUnit>, context: LayoutContext) -> Unit<Px> {
+        length * (context.font_size / self.metrics_at(context.style).units_per_em()).unlift()
+    }
+
+    /// User units → font units of the level's font, such that a glyph of that many font
+    /// units, laid out at this level (font size × level scale), spans `length`.
+    pub(super) fn to_font(&self, length: Unit<Px>, context: LayoutContext) -> Unit<FUnit> {
+        let font_size = context.font_size.scale(self.scale_at(context.style));
+        length * (self.metrics_at(context.style).units_per_em() / font_size).unlift()
     }
 }
 pub trait ToPx {
@@ -135,7 +127,7 @@ pub trait ToPx {
 impl ToPx for Unit<FUnit> {
     fn to_px<F>(self, engine: &LayoutEngine<F>, context: LayoutContext) -> Unit<Px> {
         engine
-            .scale_font_unit(self, context.font_size)
+            .scale_font_unit(self, context)
             .scale(engine.scale_factor(context.style))
     }
 }

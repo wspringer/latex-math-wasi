@@ -3,7 +3,7 @@
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
-use latex_wasi_core::{Font, Options, Style};
+use latex_wasi_core::{Font, FontSet, Options, Style};
 use latex_wasi_pdf::{to_pdf, PdfOptions};
 use latex_wasi_svg::{to_svg, SvgOptions};
 
@@ -13,7 +13,11 @@ usage: latex-wasi --font FILE [--font FILE ...] [options] [FORMULA]
 Renders a LaTeX math fragment. Reads FORMULA from stdin when not given.
 
 options:
-  --font FILE        OpenType font with a MATH table (repeatable; first is used for M1)
+  --font FILE        OpenType font with a MATH table. Repeatable: one font is used at
+                     every math level; two are [display+text, script+scriptscript];
+                     three are [display+text, script, scriptscript]; four are
+                     [display, text, script, scriptscript].
+  --levels D,T,S,SS  explicit font index (0-based, into the --font list) per level
   --format svg|pdf   output format (default svg)
   --size N           em size in user units (default 16)
   --style display|text
@@ -30,6 +34,7 @@ struct Args {
     padding: f64,
     output: Option<String>,
     formula: Option<String>,
+    levels: Option<[usize; 4]>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -41,6 +46,7 @@ fn parse_args() -> Result<Args, String> {
         padding: 0.0,
         output: None,
         formula: None,
+        levels: None,
     };
     let mut it = std::env::args().skip(1);
     let value = |flag: &str, it: &mut dyn Iterator<Item = String>| {
@@ -66,6 +72,21 @@ fn parse_args() -> Result<Args, String> {
                     "text" => Style::Text,
                     other => return Err(format!("unknown style {other}")),
                 }
+            }
+            "--levels" => {
+                let v = value("--levels", &mut it)?;
+                let parts: Vec<usize> = v
+                    .split(',')
+                    .map(|p| {
+                        p.trim()
+                            .parse()
+                            .map_err(|_| format!("--levels: bad index {p:?}"))
+                    })
+                    .collect::<Result<_, _>>()?;
+                let arr: [usize; 4] = parts
+                    .try_into()
+                    .map_err(|_| "--levels needs exactly four indices".to_string())?;
+                args.levels = Some(arr);
             }
             "-o" | "--output" => args.output = Some(value("-o", &mut it)?),
             "-h" | "--help" => return Err(String::new()),
@@ -113,8 +134,14 @@ fn run() -> Result<(), String> {
         font_size: args.size,
         style: args.style,
     };
-    let tree =
-        latex_wasi_core::render(formula, &fonts[0], &options).map_err(|e| format!("{e:?}"))?;
+    let levels = args.levels.unwrap_or(match fonts.len() {
+        1 => [0, 0, 0, 0],
+        2 => [0, 0, 1, 1],
+        3 => [0, 0, 1, 2],
+        _ => [0, 1, 2, 3],
+    });
+    let set = FontSet::new(&fonts, levels).map_err(|e| format!("{e:?}"))?;
+    let tree = latex_wasi_core::render(formula, &set, &options).map_err(|e| format!("{e:?}"))?;
 
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
     let bytes: Vec<u8> = match args.format.as_str() {

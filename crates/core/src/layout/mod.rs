@@ -711,7 +711,7 @@ mod tests {
         let nodes = parse("1").unwrap();
 
         for font_size in [10.0, 16.0, 40.0] {
-            let layout = LayoutBuilder::new(&font)
+            let layout = LayoutBuilder::single(&font)
                 .font_size(font_size)
                 .style(Style::Display)
                 .layout(&nodes)

@@ -45,6 +45,8 @@ pub enum Error {
     Parse(ParseError),
     /// a layout error (including font errors)
     Layout(LayoutError),
+    /// a font set with no fonts, or a level pointing at a font index that does not exist
+    InvalidFontSet(usize),
 }
 impl From<ParseError> for Error {
     fn from(e: ParseError) -> Self {

@@ -22,7 +22,7 @@ pub mod tree;
 pub use error::Error;
 pub use font::backend::ttf_parser::TtfMathFont as Font;
 pub use layout::Style;
-pub use tree::{GlyphInstance, RenderTree, Rule};
+pub use tree::{BBox, GlyphInstance, RenderTree, Rule};
 
 use layout::engine::LayoutBuilder;
 use render::Renderer;
@@ -45,18 +45,94 @@ impl Default for Options {
     }
 }
 
-/// Parses `tex` and lays it out with `font`, returning a flat render tree.
+/// The fonts for one layout: a list of fonts plus, for each math level
+/// (display, text, script, scriptscript), the index of the font to use.
+///
+/// Each level draws glyphs from its own font and reads MATH constants from it, so an
+/// optical-size cut (e.g. a "Caption" or "Tiny" master) can serve the small levels.
+/// Optical sizes keep their em — they change the design, not the size — so script
+/// levels are still scaled: by default by the *text* font's `ScriptPercentScaleDown` /
+/// `ScriptScriptPercentScaleDown`, or by [`FontSet::with_scales`].
+#[derive(Clone, Copy)]
+pub struct FontSet<'s, 'a> {
+    fonts: &'s [Font<'a>],
+    levels: [usize; 4],
+    scales: Option<[f64; 4]>,
+}
+
+impl<'s, 'a> FontSet<'s, 'a> {
+    /// `levels` = font index for `[display, text, script, scriptscript]`.
+    pub fn new(fonts: &'s [Font<'a>], levels: [usize; 4]) -> Result<Self, Error> {
+        if fonts.is_empty() {
+            return Err(Error::InvalidFontSet(0));
+        }
+        for &i in &levels {
+            if i >= fonts.len() {
+                return Err(Error::InvalidFontSet(i));
+            }
+        }
+        Ok(FontSet {
+            fonts,
+            levels,
+            scales: None,
+        })
+    }
+
+    /// One font for every level.
+    pub fn single(font: &'s Font<'a>) -> Self {
+        FontSet {
+            fonts: std::slice::from_ref(font),
+            levels: [0; 4],
+            scales: None,
+        }
+    }
+
+    /// Explicit glyph scale per level (display, text, script, scriptscript), replacing
+    /// the text font's `ScriptPercentScaleDown` values. TeX's classic sizes are
+    /// `[1.0, 1.0, 0.7, 0.5]`.
+    pub fn with_scales(mut self, scales: [f64; 4]) -> Self {
+        self.scales = Some(scales);
+        self
+    }
+
+    /// The per-level scales in effect, if overridden.
+    pub fn scales(&self) -> Option<[f64; 4]> {
+        self.scales
+    }
+
+    /// The font list; [`GlyphInstance::font`] indexes into it.
+    pub fn fonts(&self) -> &'s [Font<'a>] {
+        self.fonts
+    }
+
+    /// Font index per level: display, text, script, scriptscript.
+    pub fn levels(&self) -> [usize; 4] {
+        self.levels
+    }
+
+    /// Fonts per level, as the layout engine wants them.
+    fn per_level(&self) -> [&'s Font<'a>; 4] {
+        self.levels.map(|i| &self.fonts[i])
+    }
+}
+
+/// Parses `tex` and lays it out with `fonts`, returning a flat render tree.
 ///
 /// The tree's origin is the baseline start of the formula; y grows downward.
-pub fn render(tex: &str, font: &Font<'_>, options: &Options) -> Result<RenderTree, Error> {
+/// [`GlyphInstance::font`] indexes [`FontSet::fonts`].
+pub fn render(tex: &str, fonts: &FontSet<'_, '_>, options: &Options) -> Result<RenderTree, Error> {
     let nodes = parser::parse(tex)?;
-    let layout = LayoutBuilder::new(font)
+    let mut builder = LayoutBuilder::new(fonts.per_level());
+    if let Some(scales) = fonts.scales {
+        builder = builder.scales(scales);
+    }
+    let layout = builder
         .font_size(options.font_size)
         .style(options.style)
         .layout(&nodes)?;
     let size = layout.size();
     let bbox = layout.full_bounding_box();
-    let mut backend = tree::TreeBackend::new(font);
+    let mut backend = tree::TreeBackend::new(fonts.fonts().iter().collect());
     Renderer::new().render(&layout, &mut backend);
     let mut tree = backend.finish();
     tree.width = size.width;
@@ -99,7 +175,7 @@ mod tests {
                     Some(env) => format!(r"\{env}{{{character}}}"),
                     None => character.to_string(),
                 };
-                render(&formula, &font, &Options::default())
+                render(&formula, &FontSet::single(&font), &Options::default())
                     .unwrap_or_else(|e| panic!("{formula}: {e:?}"));
             }
         }
@@ -112,12 +188,12 @@ mod tests {
         let font = Font::parse(STIX).unwrap();
         let a = render(
             r"\operatorname{lim sup}_{n} a_n",
-            &font,
+            &FontSet::single(&font),
             &Options::default(),
         )
         .unwrap();
-        let b = render(r"\text{a b}", &font, &Options::default()).unwrap();
-        let c = render(r"\text{ab}", &font, &Options::default()).unwrap();
+        let b = render(r"\text{a b}", &FontSet::single(&font), &Options::default()).unwrap();
+        let c = render(r"\text{ab}", &FontSet::single(&font), &Options::default()).unwrap();
         assert!(a.glyphs.len() >= 8);
         assert!(b.width > c.width, "the space must advance");
     }
@@ -125,7 +201,7 @@ mod tests {
     #[test]
     fn simple_formula_produces_glyphs_and_a_rule() {
         let font = Font::parse(STIX).unwrap();
-        let tree = render(r"\frac{a}{b}", &font, &Options::default()).unwrap();
+        let tree = render(r"\frac{a}{b}", &FontSet::single(&font), &Options::default()).unwrap();
         assert_eq!(tree.glyphs.len(), 2);
         assert_eq!(tree.rules.len(), 1);
         assert!(tree.glyphs.iter().all(|g| g.font == 0));

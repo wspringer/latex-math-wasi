@@ -5,7 +5,7 @@
 #[path = "../../../tests/corpus/mod.rs"]
 mod corpus;
 
-use latex_wasi_core::{Font, Options, RenderTree};
+use latex_wasi_core::{Font, FontSet, Options, RenderTree};
 use latex_wasi_pdf::{to_pdf, PdfOptions};
 use latex_wasi_svg::{to_svg, SvgOptions};
 
@@ -104,7 +104,7 @@ fn svg_and_pdf_agree_on_every_glyph_and_rule() {
         let font = Font::parse(&bytes).unwrap();
         for (name, tex) in corpus::CORPUS {
             let tree: RenderTree =
-                latex_wasi_core::render(tex, &font, &Options::default()).unwrap();
+                latex_wasi_core::render(tex, &FontSet::single(&font), &Options::default()).unwrap();
             let svg = to_svg(&tree, &[&font], &SvgOptions::default()).unwrap();
             let pdf = to_pdf(&tree, &[&font], &PdfOptions::default()).unwrap();
 
@@ -183,7 +183,12 @@ fn svg_and_pdf_agree_on_every_glyph_and_rule() {
 fn pdf_is_deterministic_and_embeds_a_subset() {
     let bytes = std::fs::read(corpus::font_path("STIXTwoMath-Regular.otf")).unwrap();
     let font = Font::parse(&bytes).unwrap();
-    let tree = latex_wasi_core::render(corpus::CORPUS[0].1, &font, &Options::default()).unwrap();
+    let tree = latex_wasi_core::render(
+        corpus::CORPUS[0].1,
+        &FontSet::single(&font),
+        &Options::default(),
+    )
+    .unwrap();
     let a = to_pdf(&tree, &[&font], &PdfOptions::default()).unwrap();
     let b = to_pdf(&tree, &[&font], &PdfOptions::default()).unwrap();
     assert_eq!(a, b);
@@ -203,4 +208,31 @@ fn pdf_is_deterministic_and_embeds_a_subset() {
         a.len(),
         bytes.len()
     );
+}
+
+#[test]
+fn two_fonts_become_two_embedded_subsets() {
+    let stix = std::fs::read(corpus::font_path("STIXTwoMath-Regular.otf")).unwrap();
+    let xits = std::fs::read(corpus::font_path("XITSMath-Regular.otf")).unwrap();
+    let fonts = [Font::parse(&stix).unwrap(), Font::parse(&xits).unwrap()];
+    let set = FontSet::new(&fonts, [0, 0, 1, 1]).unwrap();
+    let tree = latex_wasi_core::render(r"x^{2} + y_{i}", &set, &Options::default()).unwrap();
+    assert!(tree.glyphs.iter().any(|g| g.font == 1));
+    let refs: Vec<&Font<'_>> = fonts.iter().collect();
+    let pdf = to_pdf(&tree, &refs, &PdfOptions::default()).unwrap();
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        text.contains("/F0 ") && text.contains("/F1 "),
+        "both font resources used"
+    );
+    assert!(text.contains("+STIXTwoMath-Regular") && text.contains("+XITSMath-Regular"));
+    assert_eq!(text.matches("/Subtype /CIDFontType0C").count(), 2);
+    // The SVG side agrees on coordinates for the mixed-font tree too.
+    let svg = to_svg(&tree, &refs, &SvgOptions::default()).unwrap();
+    let (pdf_glyphs, _) = pdf_ops(&pdf);
+    let svg_glyphs = svg_glyphs(&svg);
+    assert_eq!(pdf_glyphs.len(), svg_glyphs.len());
+    for ((px, py), (sx, sy)) in pdf_glyphs.iter().zip(&svg_glyphs) {
+        assert!(close(sx - tree.bbox.x_min, *px) && close(tree.bbox.y_max - sy, *py));
+    }
 }

@@ -287,3 +287,70 @@ STIX Two Math.
   `StemV` estimated from the weight class as Typst does. No `CIDSet`, no
   `Length1` on CFF. Fine for readers and InDesign; PDF/A would want more.
 - No stream compression (would need `miniz_oxide`; pure Rust, easy to add later).
+
+## M4 — optical size sets (2026-08-28)
+
+### What changed in the engine
+
+`LayoutEngine` now holds `fonts: [&F; 4]`, `metrics: [FontMetricsCache; 4]` and
+`scales: [f64; 4]`, indexed by level (display, text, script, scriptscript). Every
+`self.font` / `self.metrics_cache.constants()` in the engine became
+`self.font_at(context.style)` / `self.constants_at(context.style)`, so a construct is
+laid out with the constants of the font *for the style it is being laid out in*, and
+the parent's constants are what decide where a child goes — the sup/sub shift, limits
+gaps, radical gaps all read `context` (parent) while the child is built with
+`context.superscript_variant()` etc. Positions were already computed in user units in
+the parent's box, so cross-size alignment needed no extra work; the tests below pin it.
+
+Public API: `FontSet::new(&[Font], levels: [usize; 4])`, `FontSet::single(&font)`,
+`FontSet::with_scales([f64; 4])`, `render(tex, &set, &opts)`. `GlyphInstance::font`
+indexes the set's font list, so the SVG/PDF backends already handled multiple fonts —
+`to_pdf` emits one Type0 font + subset per used index (`two_fonts_become_two_embedded_subsets`).
+
+CLI: `--font` repeatable; 1 → all levels, 2 → `[0,0,1,1]`, 3 → `[0,0,1,2]`, 4 →
+`[0,1,2,3]`; `--levels D,T,S,SS` for anything else.
+
+### Correction to the brief: scripts still scale
+
+The brief says: "When a distinct font is supplied for a style, do **not** additionally
+apply `ScriptPercentScaleDown`. The design already accounts for the size." I
+implemented that first, and it is wrong. An optical size does not change the em — a
+Caption cut set at 24 px is 24 px tall; it has the larger x-height, looser spacing and
+sturdier hairlines that make it legible *when set small*. TeX does the same thing with
+`cmr5`: it is a distinct design, and it is still set at 5 pt for scriptscript. With the
+brief's rule, `x^{2}` with STIX text and Latin Modern scripts rendered the superscript
+at full text size (see the first mixed render, `target/optical/mixed.png` before the
+fix). What *is* right in the brief: the script level must draw from the script font and
+read that font's MATH constants (axis height, rule thickness, …) — and it does.
+
+So the rule is: level scale is a property of the level, defaulting to the **text**
+font's `ScriptPercentScaleDown` / `ScriptScriptPercentScaleDown` (LuaTeX takes them
+from the current text font too), overridable with `FontSet::with_scales` (TeX's
+`[1, 1, 0.7, 0.5]`, or whatever Minion Math's documentation recommends for
+Caption/Tiny). The script font's own percentages are ignored: they describe how *it*
+would like its scripts scaled, which is a question for its own text level.
+
+If you know Minion Math's cuts to be pre-scaled (I doubt it — Minion Pro Opticals are
+not, and the `size` GPOS feature exists precisely because optical cuts share an em),
+`with_scales([1.0; 4])` gives the brief's behaviour with no code change.
+
+### Also fixed while in there
+
+`to_font` (user units → font units, used to pick delimiter/radical variants) ignored
+the level scale, so at script level ReX asked for a variant `1/scale` too small and
+then drew it at the script size. Now it divides by font size × scale. None of the 54
+goldens changed (the corpus has no script-level `\left…\right` or radicals), but
+`e^{\sqrt{x+1}}` now gets a correctly sized radical.
+
+### Tests (`crates/core/tests/optical.rs`)
+
+- single font → sizes `[16, 11.2, 8.8]` (STIX 70/55).
+- distinct script font → glyph `font == 1`, sizes still `[16, 11.2, 8.8]` from the
+  text font's percentages, not XITS's 75/60.
+- explicit `with_scales([1, 1, .7, .5])` → `[16, 11.2, 8.0]`.
+- script glyph's outline is XITS's own (gid resolves to U+1D465 in XITS; outline
+  differs from STIX's), and the advance used is XITS's.
+- superscript placement: STIX parent with XITS script equals STIX parent with a second
+  STIX object as script, differs from an XITS parent, and equals
+  `-SuperscriptShiftUp(STIX) × 16` — the child font does not move the child.
+- a fraction inside a superscript takes `FractionRuleThickness` from the script font.

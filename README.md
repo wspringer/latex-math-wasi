@@ -9,8 +9,13 @@ cargo run -p latex-wasi-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
     'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}' > quadratic.svg
 ```
 
-Crates: `core` (parser + OpenType MATH layout → render tree), `svg`, `cli`; `pdf` and
-`wasm` follow. The layout engine derives from [KenyC/ReX](https://github.com/KenyC/ReX)
+Crates: `core` (parser + OpenType MATH layout → render tree), `svg`, `pdf` (real text,
+subsetted CID fonts), `cli`; `wasm` follows.
+
+Optical sizes: pass one font per math level (`--font` ×4 = display, text, script,
+scriptscript, or `--levels`). Each level draws from and reads MATH constants from its
+own font; script levels are scaled by the text font's `ScriptPercentScaleDown` unless
+overridden (`FontSet::with_scales`). The layout engine derives from [KenyC/ReX](https://github.com/KenyC/ReX)
 (MIT). Decisions and findings are recorded in [NOTES.md](NOTES.md).
 
 Test fonts in `tests/fonts/` are STIX Two Math and XITS Math (SIL OFL 1.1) and Latin

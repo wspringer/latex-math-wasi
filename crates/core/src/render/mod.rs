@@ -145,7 +145,7 @@ impl Renderer {
         use crate::parser::parse;
 
         let parse = parse(tex)?;
-        Ok(LayoutBuilder::new(font).layout(&parse)?)
+        Ok(LayoutBuilder::single(font).layout(&parse)?)
     }
 
     /// Renders the given layout onto `out`, the provided backend.

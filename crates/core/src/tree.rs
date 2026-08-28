@@ -80,9 +80,9 @@ pub(crate) struct TreeBackend<'a, F> {
 }
 
 impl<'a, F> TreeBackend<'a, F> {
-    pub(crate) fn new(font: &'a F) -> Self {
+    pub(crate) fn new(fonts: Vec<&'a F>) -> Self {
         TreeBackend {
-            fonts: vec![font],
+            fonts,
             tree: RenderTree::default(),
         }
     }
