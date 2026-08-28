@@ -10,7 +10,18 @@ cargo run -p latex-wasi-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
 ```
 
 Crates: `core` (parser + OpenType MATH layout → render tree), `svg`, `pdf` (real text,
-subsetted CID fonts), `cli`; `wasm` follows.
+subsetted CID fonts), `cli`, `wasm` (JSON request → bytes, C ABI for the browser),
+`wasi` (`wasm32-wasip1` command: request on stdin, bytes on stdout).
+
+```
+cargo build --release -p latex-wasi-wasi --target wasm32-wasip1
+wasmtime run target/wasm32-wasip1/release/latex-wasi-wasi.wasm < request.json > out.svg
+cargo build --release -p latex-wasi-wasm --target wasm32-unknown-unknown   # browser
+scripts/check-wasm.sh   # proves both produce the native CLI's bytes
+```
+
+The request schema is documented in `crates/wasm/src/lib.rs`; `scripts/wasm-smoke.mjs`
+shows the browser-side calling convention.
 
 Optical sizes: pass one font per math level (`--font` ×4 = display, text, script,
 scriptscript, or `--levels`). Each level draws from and reads MATH constants from its

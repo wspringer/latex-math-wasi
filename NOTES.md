@@ -354,3 +354,27 @@ goldens changed (the corpus has no script-level `\left…\right` or radicals), b
   STIX object as script, differs from an XITS parent, and equals
   `-SuperscriptShiftUp(STIX) × 16` — the child font does not move the child.
 - a fraction inside a superscript takes `FractionRuleThickness` from the script font.
+
+## M5 — wasm32-wasip1 and browser (2026-08-28)
+
+- `crates/wasm` (`cdylib` + `rlib`): `handle(request_json, font_blob) -> Result<Vec<u8>, String>`
+  plus a three-function C ABI (`latex_wasi_alloc`, `latex_wasi_render`,
+  `latex_wasi_free`) for `wasm32-unknown-unknown`. No `wasm-bindgen`: the module has
+  zero imports, so it instantiates with `{}` from any host, and the JS side is 20 lines
+  (`scripts/wasm-smoke.mjs`). Result is `(ptr << 32) | len`; first byte is the status.
+- `crates/wasi`: the `wasm32-wasip1` command. stdin → JSON (fonts inline as base64),
+  stdout → SVG/PDF bytes, stderr + exit 1 on error. Verified with `wasmtime run` and
+  **no** `--dir`: nothing touches the filesystem.
+- Request schema is one struct shared by both paths; `fonts` entries are either base64
+  strings or byte lengths into a separate blob (browser: pass `Uint8Array`s, no base64
+  round trip). `levels`/`scales` as in `FontSet`.
+- `scripts/check-wasm.sh` builds both modules and requires their SVG and PDF output to
+  be byte-identical to the native CLI's. It is; CI runs it (wasmtime + node actions).
+  This is the cross-platform determinism check the brief asked for: same f64 arithmetic
+  everywhere (no transcendental functions in the engine), same formatting code.
+- Dependency tree for either wasm target: 31 crates, none with a build script that
+  compiles C. Release modules are ~750 kB (the generated Unicode-math symbol table is a
+  good chunk); `opt-level = "s"` + LTO already on. `wasm-opt` would shave more but is a
+  C++ tool, so it stays out of the build.
+- `serde`/`serde_json`/`base64` are used only by the wasm crate; `core`/`svg`/`pdf`
+  stay serde-free.

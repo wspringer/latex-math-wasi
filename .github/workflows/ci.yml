@@ -39,13 +39,19 @@ jobs:
         with:
           targets: wasm32-wasip1, wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: cargo build --workspace --exclude latex-wasi-cli --target wasm32-wasip1
       - run: cargo build --workspace --exclude latex-wasi-cli --target wasm32-unknown-unknown
       - name: No C toolchain crates in the tree
         run: |
           set -e
           for t in wasm32-wasip1 wasm32-unknown-unknown; do
-            if cargo tree --workspace -e normal --target "$t" --prefix none | sort -u | grep -E '^(cc|cmake|bindgen|pkg-config) |-sys '; then
+            if cargo tree --workspace --exclude latex-wasi-cli -e normal --target "$t" --prefix none | sort -u | grep -E '^(cc|cmake|bindgen|pkg-config) |-sys '; then
               echo "C-toolchain crate found for $t"; exit 1
             fi
           done
+      - name: wasip1 and browser modules match native output byte for byte
+        run: scripts/check-wasm.sh

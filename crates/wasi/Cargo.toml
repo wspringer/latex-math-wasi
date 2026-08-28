@@ -1,0 +1,16 @@
+[package]
+name = "latex-wasi-wasi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+description = "wasm32-wasip1 command: JSON request on stdin, SVG/PDF bytes on stdout."
+
+[[bin]]
+name = "latex-wasi-wasi"
+path = "src/main.rs"
+
+[dependencies]
+latex-wasi-wasm.workspace = true
