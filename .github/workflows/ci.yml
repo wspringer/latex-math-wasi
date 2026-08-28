@@ -19,8 +19,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
       - name: Upload visual diffs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -43,8 +43,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: cargo build --workspace --exclude latex-wasi-cli --target wasm32-wasip1
-      - run: cargo build --workspace --exclude latex-wasi-cli --target wasm32-unknown-unknown
+      - run: cargo build --workspace --exclude latex-wasi-cli --locked --target wasm32-wasip1
+      - run: cargo build --workspace --exclude latex-wasi-cli --locked --target wasm32-unknown-unknown
       - name: No C toolchain crates in the tree
         run: |
           set -e

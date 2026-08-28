@@ -9,9 +9,9 @@ TEX='\left\vert \sum_k a_kb_k \right\vert \leq \left(\sum_k a_k^2\right)^{\frac1
 OUT=target/check-wasm
 mkdir -p "$OUT"
 
-cargo build -q -p latex-wasi-cli
-cargo build -q --release -p latex-wasi-wasi --target wasm32-wasip1
-cargo build -q --release -p latex-wasi-wasm --target wasm32-unknown-unknown
+cargo build -q --locked -p latex-wasi-cli
+cargo build -q --locked --release -p latex-wasi-wasi --target wasm32-wasip1
+cargo build -q --locked --release -p latex-wasi-wasm --target wasm32-unknown-unknown
 
 B64=$(base64 < "$FONT" | tr -d '\n')
 TEX_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$TEX")

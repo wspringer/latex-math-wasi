@@ -387,3 +387,27 @@ outside `nix develop` still had rustup's 1.85. Fixed the nine sites; the rule is
 run `cargo clippy` **inside** `nix develop`, which pins the same stable as CI.
 While in there: `frac` read the fraction constants from the *enclosing* style instead
 of the fraction's own (`\dfrac`/`\tfrac` overrides) — corrected to `frac_context`.
+
+## Release tooling (2026-08-28)
+
+Modelled on `../lilypond-wasi`, with one deliberate difference. lilypond-wasi has two
+version axes — its *recipe* and the *upstream LilyPond* it tails — so its tags are
+`<variant>/<lilypond>-p<recipe>` and Knope owns only the recipe number. Here there is
+one axis: the engine is vendored (not tailed) and every library we rely on is pinned
+in `Cargo.lock` and compiled into the artifact. So Knope owns the workspace version
+outright, tags are plain `v<version>`, and the "what went into this" question is
+answered by `provenance.json` on each release (git revision, vendored ReX revision,
+ttf-parser / pdf-writer / subsetter / serde_json versions) rather than by the tag.
+
+Same conventions as lilypond-wasi otherwise: change files in `.changeset/` are the
+only release source (`ignore_conventional_commits = true`), conventional subjects
+stay as hygiene, no change file = no release, Knope Bot maintains the release PR.
+Knope 0.21 handles `[workspace.package] version` in a plain `Cargo.toml` entry;
+`Cargo.lock` needs one `dependency = …` entry per workspace crate so `--locked`
+builds (now used in CI) do not break after a bump. Note that Knope treats
+`minor` as a patch bump while the version is 0.x.
+
+Tracking dependencies: Dependabot (weekly, grouped) for crates; CI decides whether a
+bump is safe (goldens, no-C scan, wasm ≡ native). The vendored engine gets
+`scripts/rex-upstream.sh`, which lists KenyC/ReX commits since
+`crates/core/REX-UPSTREAM` — porting is manual and recorded here.

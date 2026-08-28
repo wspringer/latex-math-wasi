@@ -1,0 +1,20 @@
+# Dependency bumps arrive as PRs and are verified by ci.yml: golden files catch a
+# layout or output change, the wasm job catches a C-toolchain crate creeping in.
+# Merge without a change file when the goldens are untouched; add one
+# (`knope document-change`) when output or behaviour changed, so it is released
+# and listed. The vendored engine (crates/core) is tracked by hand:
+# scripts/rex-upstream.sh.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      rust-dependencies:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

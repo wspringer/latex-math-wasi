@@ -32,3 +32,24 @@ overridden (`FontSet::with_scales`). The layout engine derives from [KenyC/ReX](
 Test fonts in `tests/fonts/` are STIX Two Math and XITS Math (SIL OFL 1.1) and Latin
 Modern Math (GUST Font License). Commercial fonts must never be committed; `.gitignore`
 blocks font files outside that directory.
+
+## Releasing
+
+One version for the whole workspace (`Cargo.toml`, `[workspace.package]`), managed
+by [Knope](https://knope.tech). A PR that changes what ships — layout, output, API,
+a dependency bump that alters output — carries a change file (`knope document-change`,
+or `.changeset/<slug>.md` with a `default: patch|minor|major` header and a
+`#### summary` line). No change file, no release: right for docs, CI and
+dependency bumps that leave the golden files untouched. Conventional commit subjects
+(`feat:`, `fix:`, `ci:`, …) stay as history hygiene; they do not decide versions.
+
+The Knope bot keeps a release PR open; merging it bumps the version, tags
+`v<version>` and publishes the GitHub release, to which `release.yml` attaches
+`latex-wasi-<version>-wasip1.wasm`, `latex-wasi-<version>-browser.wasm`,
+`provenance.json` (git revision, vendored ReX revision, versions of the libraries
+compiled in) and `SHA256SUMS`.
+
+Dependencies: Dependabot proposes crate bumps weekly, CI verifies them (goldens,
+no-C check, wasm/native byte equality). The vendored engine has no dependency to
+bump — `scripts/rex-upstream.sh` lists what KenyC/ReX has done since
+`crates/core/REX-UPSTREAM`.

@@ -1,0 +1,92 @@
+# Attach artifacts to a release. The release itself is created by the Knope bot when
+# its release PR is merged (tag v<version>); this workflow only adds the modules.
+#
+#   latex-wasi-<version>-wasip1.wasm    wasm32-wasip1 command (stdin JSON → stdout bytes)
+#   latex-wasi-<version>-browser.wasm   wasm32-unknown-unknown module, C ABI
+#   provenance.json                     git revision + versions of the libraries compiled in
+#   SHA256SUMS
+#
+# The tag is asserted against Cargo.toml, and both modules must reproduce the native
+# CLI's output byte for byte before anything is uploaded.
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1, wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the tag against Cargo.toml
+        id: tag
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.event.release.tag_name }}"
+          claimed="${tag#v}"
+          declared="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "latex-wasi-core") | .version')"
+          if [ "$claimed" != "$declared" ]; then
+            echo "::error::tag claims $claimed, Cargo.toml says $declared"; exit 1
+          fi
+          echo "version=$declared" >> "$GITHUB_OUTPUT"
+
+      - name: Build and verify the modules
+        run: scripts/check-wasm.sh
+
+      - name: Stage artifacts
+        run: |
+          set -euo pipefail
+          v="${{ steps.tag.outputs.version }}"
+          mkdir -p dist
+          cp target/wasm32-wasip1/release/latex-wasi-wasi.wasm "dist/latex-wasi-$v-wasip1.wasm"
+          cp target/wasm32-unknown-unknown/release/latex_wasi_wasm.wasm "dist/latex-wasi-$v-browser.wasm"
+          dep() { cargo metadata --format-version 1 --locked | jq -r --arg n "$1" '.packages[] | select(.name == $n) | .version' | head -1; }
+          cat > dist/provenance.json <<EOF
+          {
+            "version": "$v",
+            "tag": "${{ inputs.tag || github.event.release.tag_name }}",
+            "revision": "${{ github.sha }}",
+            "repository": "${{ github.server_url }}/${{ github.repository }}",
+            "rustc": "$(rustc --version)",
+            "engine": { "vendoredFrom": "https://github.com/KenyC/ReX", "revision": "$(tr -d '[:space:]' < crates/core/REX-UPSTREAM)" },
+            "dependencies": {
+              "ttf-parser": "$(dep ttf-parser)",
+              "pdf-writer": "$(dep pdf-writer)",
+              "subsetter": "$(dep subsetter)",
+              "serde_json": "$(dep serde_json)"
+            },
+            "targets": {
+              "wasip1": "latex-wasi-$v-wasip1.wasm",
+              "browser": "latex-wasi-$v-browser.wasm"
+            }
+          }
+          EOF
+          (cd dist && sha256sum * > SHA256SUMS)
+          cat dist/provenance.json
+
+      - name: Upload to the release
+        run: gh release upload "${{ inputs.tag || github.event.release.tag_name }}" dist/* --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
