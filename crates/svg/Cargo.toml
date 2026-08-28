@@ -1,0 +1,19 @@
+[package]
+name = "latex-wasi-svg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Render tree -> SVG with glyph outlines as paths."
+
+[lib]
+name = "latex_wasi_svg"
+
+[dependencies]
+latex-wasi-core.workspace = true
+ttf-parser.workspace = true
+
+[dev-dependencies]
+resvg = "0.48"

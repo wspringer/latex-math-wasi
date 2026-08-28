@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 -14.656 163.84 15.312" width="163.84" height="15.312">
+<defs>
+<path id="g0-44" d="M636 -220L636 -286L375 -286L375 -547L309 -547L309 -286L48 -286L48 -220L309 -220L309 41L375 41L375 -220Z"/>
+<path id="g0-52" d="M61 -510C102 -584 148 -616 210 -616C276 -616 318 -582 318 -514C318 -453 286 -408 237 -380C217 -368 191 -357 153 -344L153 -330C210 -330 233 -327 255 -320C324 -300 359 -251 359 -175C359 -90 303 -22 229 -22C201 -22 180 -27 143 -53C115 -73 99 -79 82 -79C59 -79 41 -64 41 -43C41 -7 80 14 153 14C242 14 337 -15 385 -79C414 -117 431 -166 431 -219C431 -271 415 -317 387 -348C366 -370 348 -382 304 -401C371 -441 397 -491 397 -539C397 -621 334 -676 241 -676C137 -676 74 -609 45 -514Z"/>
+<path id="g0-53" d="M292 -231L52 -231L292 -574ZM473 -167L473 -231L370 -231L370 -676L326 -676L12 -231L12 -167L292 -167L292 0L370 0L370 -167Z"/>
+<path id="g0-54" d="M438 -681L429 -688C413 -667 404 -662 381 -662L174 -662L65 -425C65 -425 64 -422 64 -420C64 -414 67 -412 76 -412C172 -412 242 -380 289 -342C334 -306 356 -256 356 -192C356 -106 291 -23 221 -23C201 -23 178 -32 150 -55C118 -81 99 -86 76 -86C48 -86 31 -73 31 -48C31 -10 83 14 158 14C226 14 281 -1 328 -35C396 -85 426 -147 426 -243C426 -296 417 -334 391 -370C334 -449 284 -471 141 -498L181 -583L375 -583C391 -583 399 -589 402 -596Z"/>
+<path id="g0-62" d="M637 -120L637 -186L48 -186L48 -120ZM637 -320L637 -386L48 -386L48 -320Z"/>
+</defs>
+<g fill="#000">
+<use xlink:href="#g0-52" transform="translate(0 0) scale(0.016)"/>
+<use xlink:href="#g0-52" transform="translate(8 -6.4) scale(0.012)"/>
+<use xlink:href="#g0-44" transform="translate(17.556 0) scale(0.016)"/>
+<use xlink:href="#g0-53" transform="translate(32.071 0) scale(0.016)"/>
+<use xlink:href="#g0-53" transform="translate(40.071 -6.4) scale(0.012)"/>
+<use xlink:href="#g0-44" transform="translate(49.627 0) scale(0.016)"/>
+<use xlink:href="#g0-52" transform="translate(64.142 0) scale(0.016)"/>
+<use xlink:href="#g0-52" transform="translate(72.142 -6.4) scale(0.012)"/>
+<use xlink:href="#g0-44" transform="translate(81.698 0) scale(0.016)"/>
+<use xlink:href="#g0-54" transform="translate(96.213 0) scale(0.016)"/>
+<use xlink:href="#g0-54" transform="translate(104.213 -6.4) scale(0.012)"/>
+<use xlink:href="#g0-62" transform="translate(115.547 0) scale(0.016)"/>
+<use xlink:href="#g0-52" transform="translate(131.84 0) scale(0.016)"/>
+<use xlink:href="#g0-53" transform="translate(139.84 0) scale(0.016)"/>
+<use xlink:href="#g0-52" transform="translate(147.84 0) scale(0.016)"/>
+<use xlink:href="#g0-54" transform="translate(155.84 0) scale(0.016)"/>
+</g>
+</svg>

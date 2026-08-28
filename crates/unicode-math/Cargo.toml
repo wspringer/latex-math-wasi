@@ -1,0 +1,15 @@
+[package]
+name = "unicode-math"
+version = "0.1.0"
+authors = ["Sebastian K <s3bk@protonmail.com>", "Keny C"]
+edition = "2021"
+license = "MIT"
+publish = false
+build = "src/build.rs"
+description = "LaTeX command name -> Unicode math symbol table, generated at build time from unicode-math-table.tex and unimathsymbols.txt. Vendored from KenyC/ReX."
+
+[dependencies]
+
+[build-dependencies]
+regex = "1"
+nom = "7.1"

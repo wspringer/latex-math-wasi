@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/unicode-math", "crates/core", "crates/svg", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/wspringer/latex-wasi"
+rust-version = "1.85"
+
+[workspace.dependencies]
+latex-wasi-core = { path = "crates/core" }
+latex-wasi-svg = { path = "crates/svg" }
+unicode-math = { path = "crates/unicode-math" }
+ttf-parser = "0.25"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

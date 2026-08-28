@@ -152,3 +152,69 @@ engine's core types and cannot be layered on from outside.
 `flake.nix` provides rustc/cargo 1.98 (oxalica rust-overlay, stable) with the
 `wasm32-wasip1` and `wasm32-unknown-unknown` targets, clippy, rustfmt,
 rust-analyzer, `wasmtime`, `wasm-tools`, `cargo-deny`. `.envrc` → `use flake`.
+
+## M1 — SVG at parity with ReX (2026-08-28)
+
+### What was done
+
+- `crates/unicode-math`: vendored from KenyC (build.rs generates the symbol table from
+  `unicode-math-table.tex` + `unimathsymbols.txt`; build-deps `regex`/`nom` run on the
+  host only, so they do not affect the wasm dependency tree).
+- `crates/core`: vendored KenyC's `parser`, `layout`, `font` (ttf-parser backend only),
+  `render` (the box walker + bbox backend), `dimensions`, `geometry`. Deleted the five
+  renderer backends, the `pdf-rs/font` backend, and `serde`/`log`. Public API is
+  `Font::parse(&[u8])`, `Options { font_size, style }`, `render(tex, &font, &opts) ->
+  RenderTree`. `tree::TreeBackend` implements ReX's `Backend` and flattens the walk into
+  `Vec<GlyphInstance { font, gid, x, y, size }>` + `Vec<Rule>`. Attribution in
+  `crates/core/LICENSE-ReX`.
+- `crates/svg`: one `<path>` per distinct `(font, gid)` in `<defs>` (sorted, `BTreeSet`),
+  `<use transform="translate(x y) scale(s)">` per instance, `<rect>` per rule. Fixed
+  precision (3 decimals for positions, 6 for scale, 2 for outline points), trailing
+  zeros and `-0` normalised. Space-like glyphs with empty outlines are skipped.
+- `crates/cli`: `latex-wasi --font F [--font F…] [--format svg] [--size N]
+  [--style display|text] [--padding N] [-o out] 'formula'`; hand-rolled arg parsing,
+  no extra deps. `--format pdf` is a stub until M3.
+- Tests: 18-formula corpus (ReX's 14 README samples + the 4 from its TeX-comparison
+  suite) × STIX Two Math / XITS Math / Latin Modern Math → 54 golden SVGs under
+  `tests/golden/`. Mismatches rasterise expected/actual/diff PNGs into
+  `target/visual-diff/` with resvg (red = lost, blue = new). Also: determinism
+  (render twice → identical), and rasterise-not-blank for every formula.
+- CI: fmt, clippy `-D warnings`, tests, and a separate job that builds the library
+  crates for `wasm32-wasip1` and `wasm32-unknown-unknown` and greps `cargo tree` for
+  `cc`/`cmake`/`bindgen`/`pkg-config`/`*-sys`.
+
+### Parity with KenyC/ReX, measured
+
+Compared glyph positions from the M0 spike binary (unmodified KenyC, XITS, 12 pt) with
+our CLI (`--size 16`, since KenyC converts pt→px at 96/72) on six corpus formulas.
+Every x coordinate is identical. Every y coordinate is identical **except on
+subscripts**, where ours sit higher by exactly `(SubscriptTopMax − SubscriptShiftDown)`
+× scale — 0.15 em in XITS (400 vs 250), 0.158 em in STIX Two, 0.097 em in Latin
+Modern. That is the inherited `subscript_shift_down` bug, fixed here; TeX rule 18a uses
+`SubscriptShiftDown` (σ16). Nested scripts and sub+sup pairs shift by derived amounts
+because the sub/sup gap rule redistributes the change. So: parity everywhere, minus one
+known bug.
+
+### Surprises
+
+- ttf-parser returns the CFF `FontMatrix` as `f32`. `1/1000` is not representable, so
+  every coordinate carried ~3e-7 relative noise and `1` laid out 6.7600003 px high at
+  10 px. `TtfMathFont` now uses the exact `f64` `1/unitsPerEm` from `head` unless the
+  CFF matrix genuinely disagrees (skew, or scale off by >1e-4).
+- KenyC's `LayoutBuilder::font_size` silently took *points* and multiplied by 96/72.
+  Removed: `font_size` is user units per em, full stop. Everything in the tree is in
+  those units.
+- ReX's `\text{…}` goes through the math cmap glyph by glyph — fine for `\mathrm{d}`
+  and short words, no kerning, no shaping. Good enough; `rustybuzz` stays out.
+- Colour (`\color`, `\gray`) parses and lays out, but the render tree drops it
+  (brief: glyphs and rules, nothing else). The `quartic` sample still renders; the
+  "Quartic" label is just black.
+- The vendored code needed ~35 clippy fixes to pass `-D warnings`; all mechanical.
+  The build script's `regex = "*"` was pinned to `1`.
+
+### Corrections to the brief
+
+- Font size: the brief never says what unit `--size` is; I chose user units per em
+  (SVG px, PDF pt) rather than TeX points, because that is what the PDF `Tf` operator
+  and the SVG viewBox want, and it keeps the SVG/PDF coordinate-equality property test
+  (M3) trivial.

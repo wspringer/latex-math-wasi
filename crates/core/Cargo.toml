@@ -1,0 +1,19 @@
+[package]
+name = "latex-wasi-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+description = "LaTeX math parser and OpenType MATH layout engine producing a positioned render tree. Layout engine derived from KenyC/ReX (MIT)."
+
+[lib]
+name = "latex_wasi_core"
+
+[dependencies]
+ttf-parser.workspace = true
+unicode-math.workspace = true
+
+[dev-dependencies]
+insta = "1"
