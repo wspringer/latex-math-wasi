@@ -1,0 +1,17 @@
+# M0 spike: KenyC/ReX layout -> collected glyph ids -> ttf-parser outlines -> SVG.
+# Not part of the workspace; build with `cargo build --manifest-path spike/Cargo.toml`.
+[package]
+name = "spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "spike"
+path = "main.rs"
+
+[dependencies]
+rex = { git = "https://github.com/KenyC/ReX", rev = "aeccdba38f3fa54195c469319b65c423e17a77ae", default-features = false, features = ["ttfparser-fontparser"] }
+ttf-parser = "0.25"
+
+[workspace]
