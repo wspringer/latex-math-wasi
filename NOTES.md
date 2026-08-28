@@ -171,7 +171,7 @@ rust-analyzer, `wasmtime`, `wasm-tools`, `cargo-deny`. `.envrc` → `use flake`.
   `<use transform="translate(x y) scale(s)">` per instance, `<rect>` per rule. Fixed
   precision (3 decimals for positions, 6 for scale, 2 for outline points), trailing
   zeros and `-0` normalised. Space-like glyphs with empty outlines are skipped.
-- `crates/cli`: `latex-wasi --font F [--font F…] [--format svg] [--size N]
+- `crates/cli`: `latex-math --font F [--font F…] [--format svg] [--size N]
   [--style display|text] [--padding N] [-o out] 'formula'`; hand-rolled arg parsing,
   no extra deps. `--format pdf` is a stub until M3.
 - Tests: 18-formula corpus (ReX's 14 README samples + the 4 from its TeX-comparison
@@ -358,8 +358,8 @@ goldens changed (the corpus has no script-level `\left…\right` or radicals), b
 ## M5 — wasm32-wasip1 and browser (2026-08-28)
 
 - `crates/wasm` (`cdylib` + `rlib`): `handle(request_json, font_blob) -> Result<Vec<u8>, String>`
-  plus a three-function C ABI (`latex_wasi_alloc`, `latex_wasi_render`,
-  `latex_wasi_free`) for `wasm32-unknown-unknown`. No `wasm-bindgen`: the module has
+  plus a three-function C ABI (`latex_math_alloc`, `latex_math_render`,
+  `latex_math_free`) for `wasm32-unknown-unknown`. No `wasm-bindgen`: the module has
   zero imports, so it instantiates with `{}` from any host, and the JS side is 20 lines
   (`scripts/wasm-smoke.mjs`). Result is `(ptr << 32) | len`; first byte is the status.
 - `crates/wasi`: the `wasm32-wasip1` command. stdin → JSON (fonts inline as base64),
@@ -411,3 +411,21 @@ Tracking dependencies: Dependabot (weekly, grouped) for crates; CI decides wheth
 bump is safe (goldens, no-C scan, wasm ≡ native). The vendored engine gets
 `scripts/rex-upstream.sh`, which lists KenyC/ReX commits since
 `crates/core/REX-UPSTREAM` — porting is manual and recorded here.
+
+## Rename: latex-wasi → latex-math-wasi (2026-08-28)
+
+The name promised a LaTeX engine in wasm; the project is math mode only (a non-goal
+in the brief). Renamed while it is cheap — no tagged release, nothing published:
+
+- repo `wspringer/latex-wasi` → `wspringer/latex-math-wasi`, pairing with the planned
+  `latex-math-mcp` the way `lilypond-wasi` pairs with `lilypond-mcp`;
+- crates `latex-wasi-*` → `latex-math-*` (`latex_math_core` …). "wasi" stays in the
+  repo name (the product is a wasi build) but not in the crate names — `core`, `svg`
+  and `pdf` have nothing to do with wasi;
+- binary `latex-wasi` → `latex-math`; release assets `latex-math-<v>-{wasip1,browser}.wasm`;
+  C ABI `latex_math_{alloc,render,free}`; PDF producer string `latex-math`.
+
+Proof it was a pure rename: the 54 golden SVGs are untouched, `scripts/check-wasm.sh`
+still reports wasip1 and browser output identical to native, insta snapshots were
+moved (`latex_wasi_core__…` → `latex_math_core__…`), and `--locked` builds pass with
+the lock file only renamed. Vendored ReX namespaces and `REX-UPSTREAM` unchanged.

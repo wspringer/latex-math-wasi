@@ -285,16 +285,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "latex-wasi-cli"
+name = "latex-math-cli"
 version = "0.1.0"
 dependencies = [
- "latex-wasi-core",
- "latex-wasi-pdf",
- "latex-wasi-svg",
+ "latex-math-core",
+ "latex-math-pdf",
+ "latex-math-svg",
 ]
 
 [[package]]
-name = "latex-wasi-core"
+name = "latex-math-core"
 version = "0.1.0"
 dependencies = [
  "insta",
@@ -303,40 +303,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "latex-wasi-pdf"
+name = "latex-math-pdf"
 version = "0.1.0"
 dependencies = [
- "latex-wasi-core",
- "latex-wasi-svg",
+ "latex-math-core",
+ "latex-math-svg",
  "pdf-writer",
  "subsetter",
  "ttf-parser",
 ]
 
 [[package]]
-name = "latex-wasi-svg"
+name = "latex-math-svg"
 version = "0.1.0"
 dependencies = [
- "latex-wasi-core",
+ "latex-math-core",
  "resvg",
  "ttf-parser",
 ]
 
 [[package]]
-name = "latex-wasi-wasi"
+name = "latex-math-wasi"
 version = "0.1.0"
 dependencies = [
- "latex-wasi-wasm",
+ "latex-math-wasm",
 ]
 
 [[package]]
-name = "latex-wasi-wasm"
+name = "latex-math-wasm"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "latex-wasi-core",
- "latex-wasi-pdf",
- "latex-wasi-svg",
+ "latex-math-core",
+ "latex-math-pdf",
+ "latex-math-svg",
  "serde",
  "serde_json",
 ]

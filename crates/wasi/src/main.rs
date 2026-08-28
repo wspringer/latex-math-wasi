@@ -1,6 +1,6 @@
 //! `wasm32-wasip1` command: JSON request on stdin (fonts inline as base64), SVG or PDF
 //! bytes on stdout, error message on stderr with exit code 1. Needs no preopened
-//! directories. See `latex_wasi_wasm` for the request schema.
+//! directories. See `latex_math_wasm` for the request schema.
 
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -11,7 +11,7 @@ fn main() -> ExitCode {
         eprintln!("error: reading stdin: {e}");
         return ExitCode::FAILURE;
     }
-    match latex_wasi_wasm::handle(&request, &[]) {
+    match latex_math_wasm::handle(&request, &[]) {
         Ok(bytes) => {
             if let Err(e) = std::io::stdout().write_all(&bytes) {
                 eprintln!("error: writing stdout: {e}");

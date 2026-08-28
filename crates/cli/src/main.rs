@@ -1,14 +1,14 @@
-//! `latex-wasi`: LaTeX math in, SVG (or PDF) out.
+//! `latex-math`: LaTeX math in, SVG (or PDF) out.
 
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
-use latex_wasi_core::{Font, FontSet, Options, Style};
-use latex_wasi_pdf::{to_pdf, PdfOptions};
-use latex_wasi_svg::{to_svg, SvgOptions};
+use latex_math_core::{Font, FontSet, Options, Style};
+use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_svg::{to_svg, SvgOptions};
 
 const USAGE: &str = "\
-usage: latex-wasi --font FILE [--font FILE ...] [options] [FORMULA]
+usage: latex-math --font FILE [--font FILE ...] [options] [FORMULA]
 
 Renders a LaTeX math fragment. Reads FORMULA from stdin when not given.
 
@@ -141,7 +141,7 @@ fn run() -> Result<(), String> {
         _ => [0, 1, 2, 3],
     });
     let set = FontSet::new(&fonts, levels).map_err(|e| format!("{e:?}"))?;
-    let tree = latex_wasi_core::render(formula, &set, &options).map_err(|e| format!("{e:?}"))?;
+    let tree = latex_math_core::render(formula, &set, &options).map_err(|e| format!("{e:?}"))?;
 
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
     let bytes: Vec<u8> = match args.format.as_str() {

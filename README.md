@@ -1,11 +1,11 @@
-# latex-wasi
+# latex-math-wasi
 
 Pure-Rust LaTeX-math → SVG / PDF renderer driven by OpenType MATH fonts. No TeX, no C,
 compiles to `wasm32-wasip1`.
 
 ```
 nix develop
-cargo run -p latex-wasi-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
+cargo run -p latex-math-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
     'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}' > quadratic.svg
 ```
 
@@ -14,9 +14,9 @@ subsetted CID fonts), `cli`, `wasm` (JSON request → bytes, C ABI for the brows
 `wasi` (`wasm32-wasip1` command: request on stdin, bytes on stdout).
 
 ```
-cargo build --release -p latex-wasi-wasi --target wasm32-wasip1
-wasmtime run target/wasm32-wasip1/release/latex-wasi-wasi.wasm < request.json > out.svg
-cargo build --release -p latex-wasi-wasm --target wasm32-unknown-unknown   # browser
+cargo build --release -p latex-math-wasi --target wasm32-wasip1
+wasmtime run target/wasm32-wasip1/release/latex-math-wasi.wasm < request.json > out.svg
+cargo build --release -p latex-math-wasm --target wasm32-unknown-unknown   # browser
 scripts/check-wasm.sh   # proves both produce the native CLI's bytes
 ```
 
@@ -45,7 +45,7 @@ dependency bumps that leave the golden files untouched. Conventional commit subj
 
 The Knope bot keeps a release PR open; merging it bumps the version, tags
 `v<version>` and publishes the GitHub release, to which `release.yml` attaches
-`latex-wasi-<version>-wasip1.wasm`, `latex-wasi-<version>-browser.wasm`,
+`latex-math-<version>-wasip1.wasm`, `latex-math-<version>-browser.wasm`,
 `provenance.json` (git revision, vendored ReX revision, versions of the libraries
 compiled in) and `SHA256SUMS`.
 

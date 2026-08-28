@@ -1,5 +1,5 @@
 {
-  description = "latex-wasi: pure-Rust LaTeX math -> SVG/PDF with OpenType MATH fonts";
+  description = "latex-math-wasi: pure-Rust LaTeX math -> SVG/PDF with OpenType MATH fonts";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

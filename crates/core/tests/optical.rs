@@ -1,7 +1,7 @@
 //! Optical-size font sets: a level with its own font is laid out from that font at full
 //! size, with the parent level's constants deciding where the child goes.
 
-use latex_wasi_core::{Font, FontSet, Options, RenderTree};
+use latex_math_core::{Font, FontSet, Options, RenderTree};
 
 fn font_bytes(file: &str) -> Vec<u8> {
     std::fs::read(
@@ -13,7 +13,7 @@ fn font_bytes(file: &str) -> Vec<u8> {
 }
 
 fn render(tex: &str, set: &FontSet<'_, '_>) -> RenderTree {
-    latex_wasi_core::render(tex, set, &Options::default()).unwrap()
+    latex_math_core::render(tex, set, &Options::default()).unwrap()
 }
 
 fn constant(font: &Font<'_>, pick: impl Fn(&ttf_parser::math::Constants<'_>) -> i16) -> f64 {

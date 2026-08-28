@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
-use latex_wasi_core::{Font, RenderTree};
+use latex_math_core::{Font, RenderTree};
 
 /// SVG output options.
 #[derive(Debug, Clone, PartialEq)]

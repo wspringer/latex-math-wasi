@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use latex_wasi_core::{Font, RenderTree};
+use latex_math_core::{Font, RenderTree};
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, Str, TextStr};
 use subsetter::GlyphRemapper;
@@ -142,7 +142,7 @@ pub fn to_pdf(
 
     pdf.catalog(catalog_id).pages(pages_id);
     pdf.pages(pages_id).kids([page_id]).count(1);
-    pdf.document_info(info_id).producer(TextStr("latex-wasi"));
+    pdf.document_info(info_id).producer(TextStr("latex-math"));
 
     let mut font_refs = Vec::new();
     for _ in &embedded {

@@ -12,12 +12,12 @@
 [package]
 versioned_files = [
   "Cargo.toml",
-  { path = "Cargo.lock", dependency = "latex-wasi-core" },
-  { path = "Cargo.lock", dependency = "latex-wasi-svg" },
-  { path = "Cargo.lock", dependency = "latex-wasi-pdf" },
-  { path = "Cargo.lock", dependency = "latex-wasi-cli" },
-  { path = "Cargo.lock", dependency = "latex-wasi-wasm" },
-  { path = "Cargo.lock", dependency = "latex-wasi-wasi" },
+  { path = "Cargo.lock", dependency = "latex-math-core" },
+  { path = "Cargo.lock", dependency = "latex-math-svg" },
+  { path = "Cargo.lock", dependency = "latex-math-pdf" },
+  { path = "Cargo.lock", dependency = "latex-math-cli" },
+  { path = "Cargo.lock", dependency = "latex-math-wasm" },
+  { path = "Cargo.lock", dependency = "latex-math-wasi" },
 ]
 changelog = "CHANGELOG.md"
 
@@ -30,7 +30,7 @@ enabled = true
 
 [github]
 owner = "wspringer"
-repo = "latex-wasi"
+repo = "latex-math-wasi"
 
 [changes]
 ignore_conventional_commits = true

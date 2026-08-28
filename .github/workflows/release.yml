@@ -1,8 +1,8 @@
 # Attach artifacts to a release. The release itself is created by the Knope bot when
 # its release PR is merged (tag v<version>); this workflow only adds the modules.
 #
-#   latex-wasi-<version>-wasip1.wasm    wasm32-wasip1 command (stdin JSON → stdout bytes)
-#   latex-wasi-<version>-browser.wasm   wasm32-unknown-unknown module, C ABI
+#   latex-math-<version>-wasip1.wasm    wasm32-wasip1 command (stdin JSON → stdout bytes)
+#   latex-math-<version>-browser.wasm   wasm32-unknown-unknown module, C ABI
 #   provenance.json                     git revision + versions of the libraries compiled in
 #   SHA256SUMS
 #
@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           tag="${{ inputs.tag || github.event.release.tag_name }}"
           claimed="${tag#v}"
-          declared="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "latex-wasi-core") | .version')"
+          declared="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "latex-math-core") | .version')"
           if [ "$claimed" != "$declared" ]; then
             echo "::error::tag claims $claimed, Cargo.toml says $declared"; exit 1
           fi
@@ -60,8 +60,8 @@ jobs:
           set -euo pipefail
           v="${{ steps.tag.outputs.version }}"
           mkdir -p dist
-          cp target/wasm32-wasip1/release/latex-wasi-wasi.wasm "dist/latex-wasi-$v-wasip1.wasm"
-          cp target/wasm32-unknown-unknown/release/latex_wasi_wasm.wasm "dist/latex-wasi-$v-browser.wasm"
+          cp target/wasm32-wasip1/release/latex-math-wasi.wasm "dist/latex-math-$v-wasip1.wasm"
+          cp target/wasm32-unknown-unknown/release/latex_math_wasm.wasm "dist/latex-math-$v-browser.wasm"
           dep() { cargo metadata --format-version 1 --locked | jq -r --arg n "$1" '.packages[] | select(.name == $n) | .version' | head -1; }
           cat > dist/provenance.json <<EOF
           {
@@ -78,8 +78,8 @@ jobs:
               "serde_json": "$(dep serde_json)"
             },
             "targets": {
-              "wasip1": "latex-wasi-$v-wasip1.wasm",
-              "browser": "latex-wasi-$v-browser.wasm"
+              "wasip1": "latex-math-$v-wasip1.wasm",
+              "browser": "latex-math-$v-browser.wasm"
             }
           }
           EOF

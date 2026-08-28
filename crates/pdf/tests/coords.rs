@@ -5,9 +5,9 @@
 #[path = "../../../tests/corpus/mod.rs"]
 mod corpus;
 
-use latex_wasi_core::{Font, FontSet, Options, RenderTree};
-use latex_wasi_pdf::{to_pdf, PdfOptions};
-use latex_wasi_svg::{to_svg, SvgOptions};
+use latex_math_core::{Font, FontSet, Options, RenderTree};
+use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_svg::{to_svg, SvgOptions};
 
 /// Glyph origins from the SVG, in SVG user space.
 fn svg_glyphs(svg: &str) -> Vec<Point> {
@@ -104,7 +104,7 @@ fn svg_and_pdf_agree_on_every_glyph_and_rule() {
         let font = Font::parse(&bytes).unwrap();
         for (name, tex) in corpus::CORPUS {
             let tree: RenderTree =
-                latex_wasi_core::render(tex, &FontSet::single(&font), &Options::default()).unwrap();
+                latex_math_core::render(tex, &FontSet::single(&font), &Options::default()).unwrap();
             let svg = to_svg(&tree, &[&font], &SvgOptions::default()).unwrap();
             let pdf = to_pdf(&tree, &[&font], &PdfOptions::default()).unwrap();
 
@@ -115,7 +115,7 @@ fn svg_and_pdf_agree_on_every_glyph_and_rule() {
                 "{font_file}/{name}: pdf glyph count"
             );
             let svg_glyphs = svg_glyphs(&svg);
-            let drawn: Vec<&latex_wasi_core::GlyphInstance> = tree
+            let drawn: Vec<&latex_math_core::GlyphInstance> = tree
                 .glyphs
                 .iter()
                 .filter(|g| has_outline(&font, g.gid))
@@ -183,7 +183,7 @@ fn svg_and_pdf_agree_on_every_glyph_and_rule() {
 fn pdf_is_deterministic_and_embeds_a_subset() {
     let bytes = std::fs::read(corpus::font_path("STIXTwoMath-Regular.otf")).unwrap();
     let font = Font::parse(&bytes).unwrap();
-    let tree = latex_wasi_core::render(
+    let tree = latex_math_core::render(
         corpus::CORPUS[0].1,
         &FontSet::single(&font),
         &Options::default(),
@@ -216,7 +216,7 @@ fn two_fonts_become_two_embedded_subsets() {
     let xits = std::fs::read(corpus::font_path("XITSMath-Regular.otf")).unwrap();
     let fonts = [Font::parse(&stix).unwrap(), Font::parse(&xits).unwrap()];
     let set = FontSet::new(&fonts, [0, 0, 1, 1]).unwrap();
-    let tree = latex_wasi_core::render(r"x^{2} + y_{i}", &set, &Options::default()).unwrap();
+    let tree = latex_math_core::render(r"x^{2} + y_{i}", &set, &Options::default()).unwrap();
     assert!(tree.glyphs.iter().any(|g| g.font == 1));
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
     let pdf = to_pdf(&tree, &refs, &PdfOptions::default()).unwrap();

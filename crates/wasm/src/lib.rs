@@ -24,9 +24,9 @@
 //! the CLI's rule: 1 font → all levels, 2 → `[0,0,1,1]`, 3 → `[0,0,1,2]`, 4 → `[0,1,2,3]`.
 
 use base64::Engine;
-use latex_wasi_core::{Font, FontSet, Options, Style};
-use latex_wasi_pdf::{to_pdf, PdfOptions};
-use latex_wasi_svg::{to_svg, SvgOptions};
+use latex_math_core::{Font, FontSet, Options, Style};
+use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_svg::{to_svg, SvgOptions};
 use serde::Deserialize;
 
 /// A parsed request.
@@ -137,7 +137,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
         style,
     };
     let tree =
-        latex_wasi_core::render(&request.tex, &set, &options).map_err(|e| format!("{e:?}"))?;
+        latex_math_core::render(&request.tex, &set, &options).map_err(|e| format!("{e:?}"))?;
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
     match request.format.as_str() {
         "svg" => to_svg(
@@ -165,19 +165,19 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
 // ---- C ABI for wasm32-unknown-unknown -------------------------------------------------
 //
 // Host protocol:
-//   ptr = latex_wasi_alloc(len)            allocate an input buffer, write into it
-//   r   = latex_wasi_render(req, req_len, blob, blob_len)
+//   ptr = latex_math_alloc(len)            allocate an input buffer, write into it
+//   r   = latex_math_render(req, req_len, blob, blob_len)
 //         → u64: (result_ptr << 32) | result_len; result[0] is 0 for success (payload
 //           follows) or 1 for error (UTF-8 message follows)
-//   latex_wasi_free(ptr, len)              free any buffer obtained from this module
+//   latex_math_free(ptr, len)              free any buffer obtained from this module
 // Input buffers are not consumed; free them yourself.
 
 /// Allocates `len` bytes and returns the pointer (null for `len == 0`).
 ///
 /// # Safety
-/// The returned buffer must be freed with [`latex_wasi_free`] using the same `len`.
+/// The returned buffer must be freed with [`latex_math_free`] using the same `len`.
 #[no_mangle]
-pub unsafe extern "C" fn latex_wasi_alloc(len: usize) -> *mut u8 {
+pub unsafe extern "C" fn latex_math_alloc(len: usize) -> *mut u8 {
     if len == 0 {
         return std::ptr::null_mut();
     }
@@ -187,12 +187,12 @@ pub unsafe extern "C" fn latex_wasi_alloc(len: usize) -> *mut u8 {
     p
 }
 
-/// Frees a buffer returned by [`latex_wasi_alloc`] or [`latex_wasi_render`].
+/// Frees a buffer returned by [`latex_math_alloc`] or [`latex_math_render`].
 ///
 /// # Safety
 /// `ptr`/`len` must be exactly what this module handed out.
 #[no_mangle]
-pub unsafe extern "C" fn latex_wasi_free(ptr: *mut u8, len: usize) {
+pub unsafe extern "C" fn latex_math_free(ptr: *mut u8, len: usize) {
     if !ptr.is_null() && len != 0 {
         drop(Vec::from_raw_parts(ptr, 0, len));
     }
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn latex_wasi_free(ptr: *mut u8, len: usize) {
 /// # Safety
 /// `req`/`blob` must point to `req_len`/`blob_len` readable bytes.
 #[no_mangle]
-pub unsafe extern "C" fn latex_wasi_render(
+pub unsafe extern "C" fn latex_math_render(
     req: *const u8,
     req_len: usize,
     blob: *const u8,

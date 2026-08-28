@@ -161,8 +161,8 @@ impl<U, V> Unit<Ratio<U, V>> {
     /// This can be used to multiply two ratios together, for instance:
     ///
     /// ```
-    /// # use latex_wasi_core::dimensions::units::{Ratio, Pt, Em, Inch};
-    /// # use latex_wasi_core::dimensions::Unit;
+    /// # use latex_math_core::dimensions::units::{Ratio, Pt, Em, Inch};
+    /// # use latex_math_core::dimensions::Unit;
     /// let x : Unit<Ratio<Pt, Em>>   = Unit::new(4. / 3.);
     /// let y : Unit<Ratio<Inch, Pt>> = Unit::new(5. / 4.);
     ///

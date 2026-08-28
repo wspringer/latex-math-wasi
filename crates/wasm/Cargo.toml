@@ -1,5 +1,5 @@
 [package]
-name = "latex-wasi-wasm"
+name = "latex-math-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,13 +9,13 @@ publish = false
 description = "JSON request -> SVG/PDF bytes; C-ABI exports for wasm32-unknown-unknown (browser), shared request handling for the wasip1 command."
 
 [lib]
-name = "latex_wasi_wasm"
+name = "latex_math_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-latex-wasi-core.workspace = true
-latex-wasi-svg.workspace = true
-latex-wasi-pdf.workspace = true
+latex-math-core.workspace = true
+latex-math-svg.workspace = true
+latex-math-pdf.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"

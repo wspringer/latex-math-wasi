@@ -1,5 +1,5 @@
 [package]
-name = "latex-wasi-svg"
+name = "latex-math-svg"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,10 +9,10 @@ publish = false
 description = "Render tree -> SVG with glyph outlines as paths."
 
 [lib]
-name = "latex_wasi_svg"
+name = "latex_math_svg"
 
 [dependencies]
-latex-wasi-core.workspace = true
+latex-math-core.workspace = true
 ttf-parser.workspace = true
 
 [dev-dependencies]

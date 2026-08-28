@@ -11,11 +11,11 @@ mod corpus;
 use std::fs;
 use std::path::PathBuf;
 
-use latex_wasi_core::{Font, FontSet, Options};
-use latex_wasi_svg::{to_svg, SvgOptions};
+use latex_math_core::{Font, FontSet, Options};
+use latex_math_svg::{to_svg, SvgOptions};
 
 fn render(font: &Font<'_>, tex: &str) -> String {
-    let tree = latex_wasi_core::render(tex, &FontSet::single(font), &Options::default()).unwrap();
+    let tree = latex_math_core::render(tex, &FontSet::single(font), &Options::default()).unwrap();
     to_svg(&tree, &[font], &SvgOptions::default()).unwrap()
 }
 

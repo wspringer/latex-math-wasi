@@ -1,5 +1,5 @@
 [package]
-name = "latex-wasi-pdf"
+name = "latex-math-pdf"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,13 +9,13 @@ publish = false
 description = "Render tree -> PDF with real text and embedded, subsetted CID fonts."
 
 [lib]
-name = "latex_wasi_pdf"
+name = "latex_math_pdf"
 
 [dependencies]
-latex-wasi-core.workspace = true
+latex-math-core.workspace = true
 ttf-parser.workspace = true
 pdf-writer = "0.15"
 subsetter = { version = "0.2", default-features = false }
 
 [dev-dependencies]
-latex-wasi-svg.workspace = true
+latex-math-svg.workspace = true

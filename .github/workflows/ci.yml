@@ -43,13 +43,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: cargo build --workspace --exclude latex-wasi-cli --locked --target wasm32-wasip1
-      - run: cargo build --workspace --exclude latex-wasi-cli --locked --target wasm32-unknown-unknown
+      - run: cargo build --workspace --exclude latex-math-cli --locked --target wasm32-wasip1
+      - run: cargo build --workspace --exclude latex-math-cli --locked --target wasm32-unknown-unknown
       - name: No C toolchain crates in the tree
         run: |
           set -e
           for t in wasm32-wasip1 wasm32-unknown-unknown; do
-            if cargo tree --workspace --exclude latex-wasi-cli -e normal --target "$t" --prefix none | sort -u | grep -E '^(cc|cmake|bindgen|pkg-config) |-sys '; then
+            if cargo tree --workspace --exclude latex-math-cli -e normal --target "$t" --prefix none | sort -u | grep -E '^(cc|cmake|bindgen|pkg-config) |-sys '; then
               echo "C-toolchain crate found for $t"; exit 1
             fi
           done
