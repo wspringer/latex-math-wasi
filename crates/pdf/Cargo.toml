@@ -1,0 +1,21 @@
+[package]
+name = "latex-wasi-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Render tree -> PDF with real text and embedded, subsetted CID fonts."
+
+[lib]
+name = "latex_wasi_pdf"
+
+[dependencies]
+latex-wasi-core.workspace = true
+ttf-parser.workspace = true
+pdf-writer = "0.15"
+subsetter = { version = "0.2", default-features = false }
+
+[dev-dependencies]
+latex-wasi-svg.workspace = true

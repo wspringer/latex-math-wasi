@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/unicode-math", "crates/core", "crates/svg", "crates/cli"]
+members = ["crates/unicode-math", "crates/core", "crates/svg", "crates/pdf", "crates/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 latex-wasi-core = { path = "crates/core" }
 latex-wasi-svg = { path = "crates/svg" }
+latex-wasi-pdf = { path = "crates/pdf" }
 unicode-math = { path = "crates/unicode-math" }
 ttf-parser = "0.25"
 

@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::process::ExitCode;
 
 use latex_wasi_core::{Font, Options, Style};
+use latex_wasi_pdf::{to_pdf, PdfOptions};
 use latex_wasi_svg::{to_svg, SvgOptions};
 
 const USAGE: &str = "\
@@ -115,9 +116,9 @@ fn run() -> Result<(), String> {
     let tree =
         latex_wasi_core::render(formula, &fonts[0], &options).map_err(|e| format!("{e:?}"))?;
 
+    let refs: Vec<&Font<'_>> = fonts.iter().collect();
     let bytes: Vec<u8> = match args.format.as_str() {
         "svg" => {
-            let refs: Vec<&Font<'_>> = fonts.iter().collect();
             let svg_options = SvgOptions {
                 padding: args.padding,
                 ..SvgOptions::default()
@@ -126,7 +127,12 @@ fn run() -> Result<(), String> {
                 .map_err(|e| e.to_string())?
                 .into_bytes()
         }
-        "pdf" => return Err("pdf output arrives in M3".into()),
+        "pdf" => {
+            let pdf_options = PdfOptions {
+                padding: args.padding,
+            };
+            to_pdf(&tree, &refs, &pdf_options).map_err(|e| e.to_string())?
+        }
         other => return Err(format!("unknown format {other}")),
     };
 

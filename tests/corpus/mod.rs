@@ -3,6 +3,7 @@
 //! four formulas from ReX's TeX-comparison suite.
 //!
 //! Shared between test crates via `#[path]`.
+#![allow(dead_code)]
 
 pub const CORPUS: &[(&str, &str)] = &[
     (

@@ -235,3 +235,55 @@ known bug.
   the font's design, not a scaling error — the engine substitutes `ssty` level 1/2 for
   script/scriptscript as ReX does.
 - Not supported (parser): `\boldsymbol`, `\,` inside `\operatorname{}`. Left as is.
+
+## M3 — PDF with embedded subsetted fonts (2026-08-28)
+
+### Shape
+
+`crates/pdf`: one page, media box = bbox (+ padding), y flipped so the PDF origin is
+the bbox's bottom-left. Per used font index: `Type0` (Identity-H) → `CIDFont` →
+`FontDescriptor` → font program, plus a ToUnicode CMap. Subsetting via `subsetter`
+0.2 (`default-features = false` — the default pulls `skrifa` for variable fonts,
+which we do not need). CFF fonts: the subsetter always emits a CID-keyed CFF with an
+identity charset, so the bare `CFF ` table is embedded as `FontFile3 /CIDFontType0C`
+and CID = subset gid. TrueType fonts: whole subset as `FontFile2`,
+`CIDFontType2`, `/CIDToGIDMap /Identity`. Widths are `/W [0 [w0 w1 …]]` in 1/1000 em.
+
+The content stream is written by hand rather than through `pdf_writer::Content`:
+pdf-writer encodes `Str` as a literal with octal escapes (`(\000\002) Tj`), which is
+legal but unreadable, and prints `f32` shortest-repr (`4.2720003`). Ours is
+`/F0 16 Tf`, relative `Td`, `<0002> Tj`, `x y w h re f`, all at 3 decimals — the same
+precision as the SVG, and byte-deterministic. `Td` deltas are computed from the
+*rounded* previous position so the accumulated position never drifts (the first
+version drifted 2e-3 after ~30 glyphs and failed the cross-backend test).
+
+### Verified outside cargo
+
+`qpdf --check` clean; `pdffonts` shows `CID Type 0C … emb yes sub yes uni yes`
+(CFF) and `CID TrueType` (Noto Sans Math); `pdftotext` recovers `sin(𝑥) d𝑥 = 𝜋`
+through the ToUnicode map (math-italic codepoints U+1D465 etc., as the font's cmap
+says); poppler and Ghostscript rasterise correctly. A 5.9 kB PDF embeds a 838 kB
+STIX Two Math.
+
+### Tests
+
+- `svg_and_pdf_agree_on_every_glyph_and_rule`: parses both outputs back (SVG `<use>`
+  transforms and `<rect>`s; PDF `Td`/`Tj`/`re` tokens) and checks every glyph and rule
+  lands at the same place, for all 54 corpus×font combinations. Space glyphs are in
+  the PDF (real text) but not the SVG (no outline), so the SVG side is compared after
+  filtering by "has an outline".
+- Determinism, `CIDFontType0C` present, subset-tagged BaseFont, ToUnicode present,
+  output < 1/10 of the font size.
+
+### Details worth knowing
+
+- Subset tag: FNV-1a over the sorted original glyph ids → six letters. Same glyph set,
+  same tag, so identical formulas produce identical PDFs.
+- ToUnicode picks the *smallest* Unicode codepoint that maps to a glyph. Glyphs reached
+  only via `ssty`/size variants/assemblies have no cmap entry and get no mapping;
+  readers will show them as nothing when copying. Mapping variants back to their base
+  character would need the GSUB/MathVariants reverse lookup — possible later.
+- `FontDescriptor`: `Symbolic` (+`Italic` when the post table's italic angle ≠ 0),
+  `StemV` estimated from the weight class as Typst does. No `CIDSet`, no
+  `Length1` on CFF. Fine for readers and InDesign; PDF/A would want more.
+- No stream compression (would need `miniz_oxide`; pure Rust, easy to add later).
