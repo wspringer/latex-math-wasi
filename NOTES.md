@@ -218,3 +218,20 @@ known bug.
   (SVG px, PDF pt) rather than TeX points, because that is what the PDF `Tf` operator
   and the SVG viewBox want, and it keeps the SVG/PDF coordinate-equality property test
   (M3) trivial.
+
+## M2 — arbitrary MATH fonts (2026-08-28)
+
+- All 18 corpus formulas render without error in eight fonts: the three committed
+  ones plus Asana Math, Fira Math, Garamond Math, TeX Gyre Pagella Math (CFF) and
+  Noto Sans Math (TrueType `glyf` outlines — the only non-CFF MATH font I could find).
+  Inspected the CFF/TrueType/Asana renders by eye; nothing font-specific broke.
+  Those five are not committed (brief: three free fonts for committed tests).
+- Bug found and fixed: `glyph_from_gid` treated a glyph without a bounding box as a
+  missing glyph. Space (gid 1 in STIX Two) has an advance but no contours, so
+  `\operatorname{lim sup}` failed with `MissingGlyphGID(1)`. Contourless glyphs now get
+  an empty box. `\text{a b}` had worked only because the text path never asked for the
+  space's box.
+- Noto Sans Math's `ssty` alternates are visibly heavier than its text glyphs; that is
+  the font's design, not a scaling error — the engine substitutes `ssty` level 1/2 for
+  script/scriptscript as ReX does.
+- Not supported (parser): `\boldsymbol`, `\,` inside `\operatorname{}`. Left as is.

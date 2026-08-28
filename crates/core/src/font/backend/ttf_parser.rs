@@ -338,14 +338,21 @@ impl crate::font::MathFont for TtfMathFont<'_> {
 
     fn glyph_from_gid(&self, gid: GlyphId) -> Result<crate::font::Glyph<'_, Self>, FontError> {
         let glyph_id: ttf_parser::GlyphId = gid.into();
-        let bbox = self
-            .font
-            .glyph_bounding_box(glyph_id)
-            .ok_or(FontError::MissingGlyphGID(gid))?;
         let advance = self
             .font
             .glyph_hor_advance(glyph_id)
             .ok_or(FontError::MissingGlyphGID(gid))?;
+        // Glyphs without contours (space, no-break space, some combining marks) have no
+        // bounding box; they are still valid glyphs with an advance, so give them an empty box.
+        let bbox = self
+            .font
+            .glyph_bounding_box(glyph_id)
+            .unwrap_or(ttf_parser::Rect {
+                x_min: 0,
+                y_min: 0,
+                x_max: 0,
+                y_max: 0,
+            });
         let lsb = self
             .font
             .glyph_hor_side_bearing(glyph_id)

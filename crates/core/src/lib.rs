@@ -105,6 +105,23 @@ mod tests {
         }
     }
 
+    /// Space glyphs have an advance but no contours; they must lay out as empty boxes,
+    /// not fail as missing glyphs.
+    #[test]
+    fn contourless_glyphs_lay_out() {
+        let font = Font::parse(STIX).unwrap();
+        let a = render(
+            r"\operatorname{lim sup}_{n} a_n",
+            &font,
+            &Options::default(),
+        )
+        .unwrap();
+        let b = render(r"\text{a b}", &font, &Options::default()).unwrap();
+        let c = render(r"\text{ab}", &font, &Options::default()).unwrap();
+        assert!(a.glyphs.len() >= 8);
+        assert!(b.width > c.width, "the space must advance");
+    }
+
     #[test]
     fn simple_formula_produces_glyphs_and_a_rule() {
         let font = Font::parse(STIX).unwrap();
