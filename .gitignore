@@ -1,0 +1,18 @@
+/target
+**/target
+*.wasm
+!tests/fixtures/**/*.wasm
+
+# Licensed fonts: NEVER commit. Minion Math (typoma) and any other commercial font.
+fonts/private/
+*.otf
+*.ttf
+*.woff
+*.woff2
+# Free MATH fonts used by the test suite are allowed under tests/fonts/.
+!tests/fonts/*.otf
+!tests/fonts/*.ttf
+
+.direnv/
+.DS_Store
+result
