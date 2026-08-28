@@ -575,25 +575,19 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         let diff_offsets = base_offset - acc_offset;
 
-        let accent_node;
-        let base_node;
         let base_depth = base.depth;
         let base_height = base.height;
-        if diff_offsets > Unit::ZERO {
+        let (accent_node, base_node) = if diff_offsets > Unit::ZERO {
             let mut hbox_accent = layout::builders::HBox::new();
             hbox_accent.add_node(LayoutNode::horiz_kern(diff_offsets));
             hbox_accent.add_node(accent);
-
-            base_node = base.as_node();
-            accent_node = hbox_accent.build();
+            (hbox_accent.build(), base.as_node())
         } else {
             let mut hbox_base = layout::builders::HBox::new();
             hbox_base.add_node(LayoutNode::horiz_kern(-diff_offsets));
             hbox_base.add_node(base.as_node());
-
-            base_node = hbox_base.build();
-            accent_node = accent;
-        }
+            (accent, hbox_base.build())
+        };
 
         let mut vbox = layout::builders::VBox::new();
 
@@ -914,7 +908,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
 
         let bar = match frac.bar_thickness {
             BarThickness::Default => self
-                .constants_at(context.style)
+                .constants_at(frac_context.style)
                 .fraction_rule_thickness
                 .to_px(self, frac_context),
             BarThickness::None => Unit::ZERO,
@@ -936,49 +930,29 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         let denom = d.as_node();
 
         let axis = self
-            .constants_at(context.style)
+            .constants_at(frac_context.style)
             .axis_height
             .to_px(self, frac_context);
-        let shift_up;
-        let shift_down;
-        let gap_num;
-        let gap_denom;
-
-        if frac_context.style > Style::Text {
-            shift_up = self
-                .constants_at(context.style)
-                .fraction_numerator_display_style_shift_up
-                .to_px(self, frac_context);
-            shift_down = self
-                .constants_at(context.style)
-                .fraction_denominator_display_style_shift_down
-                .to_px(self, frac_context);
-            gap_num = self
-                .constants_at(context.style)
-                .fraction_num_display_style_gap_min
-                .to_px(self, frac_context);
-            gap_denom = self
-                .constants_at(context.style)
-                .fraction_denom_display_style_gap_min
-                .to_px(self, frac_context);
+        let c = self.constants_at(frac_context.style);
+        let (shift_up, shift_down, gap_num, gap_denom) = if frac_context.style > Style::Text {
+            (
+                c.fraction_numerator_display_style_shift_up,
+                c.fraction_denominator_display_style_shift_down,
+                c.fraction_num_display_style_gap_min,
+                c.fraction_denom_display_style_gap_min,
+            )
         } else {
-            shift_up = self
-                .constants_at(context.style)
-                .fraction_numerator_shift_up
-                .to_px(self, frac_context);
-            shift_down = self
-                .constants_at(context.style)
-                .fraction_denominator_shift_down
-                .to_px(self, frac_context);
-            gap_num = self
-                .constants_at(context.style)
-                .fraction_numerator_gap_min
-                .to_px(self, frac_context);
-            gap_denom = self
-                .constants_at(context.style)
-                .fraction_denominator_gap_min
-                .to_px(self, frac_context);
-        }
+            (
+                c.fraction_numerator_shift_up,
+                c.fraction_denominator_shift_down,
+                c.fraction_numerator_gap_min,
+                c.fraction_denominator_gap_min,
+            )
+        };
+        let shift_up = shift_up.to_px(self, frac_context);
+        let shift_down = shift_down.to_px(self, frac_context);
+        let gap_num = gap_num.to_px(self, frac_context);
+        let gap_denom = gap_denom.to_px(self, frac_context);
 
         let kern_num = Unit::max(shift_up - axis - bar.scale(0.5), gap_num - numer.depth);
         let kern_den = Unit::max(shift_down + axis - denom.height - bar.scale(0.5), gap_denom);
@@ -994,8 +968,9 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
         );
 
         let null_delimiter_space =
-            self.constants_at(context.style).null_delimiter_space * frac_context.font_size;
-        let axis_height = self.constants_at(context.style).axis_height * frac_context.font_size;
+            self.constants_at(frac_context.style).null_delimiter_space * frac_context.font_size;
+        let axis_height =
+            self.constants_at(frac_context.style).axis_height * frac_context.font_size;
         // Enclose fraction with delimiters if provided, otherwise with a NULL_DELIMITER_SPACE.
         let left = match frac.left_delimiter {
             None => LayoutNode::horiz_kern(null_delimiter_space),
@@ -1004,7 +979,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                     Unit::max(inner.height - axis_height, axis_height - inner.depth).scale(2.0);
                 let clearance = Unit::max(
                     clearance,
-                    self.constants_at(context.style)
+                    self.constants_at(frac_context.style)
                         .delimited_sub_formula_min_height
                         * frac_context.font_size,
                 );
@@ -1029,7 +1004,7 @@ impl<'f, F: MathFont> LayoutEngine<'f, F> {
                     Unit::max(inner.height - axis_height, axis_height - inner.depth).scale(2.0);
                 let clearance = Unit::max(
                     clearance,
-                    self.constants_at(context.style)
+                    self.constants_at(frac_context.style)
                         .delimited_sub_formula_min_height
                         * frac_context.font_size,
                 );

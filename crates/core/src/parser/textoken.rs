@@ -64,22 +64,21 @@ impl<'a> Iterator for TokenIterator<'a> {
                 {
                     // there is a character after '\'
 
-                    let control_sequence_name: &str;
-                    if control_seq_first_char.is_ascii_alphabetic() {
-                        // the control sequence starts with an alphanumeric character ;
-                        // we take this character and all subsequent alphanumeric chars to be the control sequences name
-                        let index = beginning_control_seq
-                            .find(|c: char| !c.is_ascii_alphabetic()) // either there is a non-alphanumeric character following
-                            .unwrap_or(beginning_control_seq.len()); // or the rest of the string is alphanumeric
-                        input_processor.stream = &beginning_control_seq[index..];
-                        control_sequence_name = &beginning_control_seq[..index];
-                    } else {
-                        // the control sequence does not start with an alphanumeric character
-                        // that character and that character only is the name of the control sequence.
-                        input_processor.stream = rest;
-                        control_sequence_name =
-                            &beginning_control_seq[..control_seq_first_char.len_utf8()];
-                    }
+                    let control_sequence_name: &str =
+                        if control_seq_first_char.is_ascii_alphabetic() {
+                            // the control sequence starts with an alphanumeric character ;
+                            // we take this character and all subsequent alphanumeric chars to be the control sequences name
+                            let index = beginning_control_seq
+                                .find(|c: char| !c.is_ascii_alphabetic()) // either there is a non-alphanumeric character following
+                                .unwrap_or(beginning_control_seq.len()); // or the rest of the string is alphanumeric
+                            input_processor.stream = &beginning_control_seq[index..];
+                            &beginning_control_seq[..index]
+                        } else {
+                            // the control sequence does not start with an alphanumeric character
+                            // that character and that character only is the name of the control sequence.
+                            input_processor.stream = rest;
+                            &beginning_control_seq[..control_seq_first_char.len_utf8()]
+                        };
                     // Either way, skip whitespaces following the control sequence name
                     // and return name
                     input_processor.skip_whitespace();

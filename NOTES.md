@@ -378,3 +378,12 @@ goldens changed (the corpus has no script-level `\left…\right` or radicals), b
   C++ tool, so it stays out of the build.
 - `serde`/`serde_json`/`base64` are used only by the wasm crate; `core`/`svg`/`pdf`
   stay serde-free.
+
+### CI toolchain note (post-M5)
+
+CI was red from M2 to M5: `dtolnay/rust-toolchain@stable` is Rust 1.98, which adds the
+`mismatched_lifetime_syntaxes` lint and a stricter `needless_late_init`, while my shell
+outside `nix develop` still had rustup's 1.85. Fixed the nine sites; the rule is now:
+run `cargo clippy` **inside** `nix develop`, which pins the same stable as CI.
+While in there: `frac` read the fraction constants from the *enclosing* style instead
+of the fraction's own (`\dfrac`/`\tfrac` overrides) — corrected to `frac_context`.

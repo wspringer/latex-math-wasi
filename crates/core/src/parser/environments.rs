@@ -75,65 +75,59 @@ impl<'a, I: Iterator<Item = TexToken<'a>>> Parser<'a, I> {
         }
         let mut rows = self.parse_array_body(env)?;
 
-        let left_delimiter;
-        let right_delimiter;
-
-        match env {
-            Environment::Array | Environment::Matrix | Environment::Aligned => {
-                left_delimiter = None;
-                right_delimiter = None;
-            }
-            Environment::PMatrix => {
-                left_delimiter = Some(Symbol {
+        let (left_delimiter, right_delimiter) = match env {
+            Environment::Array | Environment::Matrix | Environment::Aligned => (None, None),
+            Environment::PMatrix => (
+                Some(Symbol {
                     codepoint: '(',
                     atom_type: TexSymbolType::Inner,
-                });
-                right_delimiter = Some(Symbol {
+                }),
+                Some(Symbol {
                     codepoint: ')',
                     atom_type: TexSymbolType::Inner,
-                });
-            }
-            Environment::BMatrix => {
-                left_delimiter = Some(Symbol {
+                }),
+            ),
+            Environment::BMatrix => (
+                Some(Symbol {
                     codepoint: '[',
                     atom_type: TexSymbolType::Inner,
-                });
-                right_delimiter = Some(Symbol {
+                }),
+                Some(Symbol {
                     codepoint: ']',
                     atom_type: TexSymbolType::Inner,
-                });
-            }
-            Environment::BbMatrix => {
-                left_delimiter = Some(Symbol {
+                }),
+            ),
+            Environment::BbMatrix => (
+                Some(Symbol {
                     codepoint: '{',
                     atom_type: TexSymbolType::Inner,
-                });
-                right_delimiter = Some(Symbol {
+                }),
+                Some(Symbol {
                     codepoint: '}',
                     atom_type: TexSymbolType::Inner,
-                });
-            }
-            Environment::VMatrix => {
-                left_delimiter = Some(Symbol {
+                }),
+            ),
+            Environment::VMatrix => (
+                Some(Symbol {
                     codepoint: '|',
                     atom_type: TexSymbolType::Inner,
-                });
-                right_delimiter = Some(Symbol {
+                }),
+                Some(Symbol {
                     codepoint: '|',
                     atom_type: TexSymbolType::Inner,
-                });
-            }
-            Environment::VvMatrix => {
-                left_delimiter = Some(Symbol {
+                }),
+            ),
+            Environment::VvMatrix => (
+                Some(Symbol {
                     codepoint: '\u{2016}',
                     atom_type: TexSymbolType::Inner,
-                });
-                right_delimiter = Some(Symbol {
+                }),
+                Some(Symbol {
                     codepoint: '\u{2016}',
                     atom_type: TexSymbolType::Inner,
-                });
-            }
-        }
+                }),
+            ),
+        };
 
         // For the `aligned` ennvironment, we add dummies in even columns (second, fourth, etc.)
         // which copy the atom_type of the last node of the previous column

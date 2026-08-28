@@ -102,14 +102,14 @@ pub struct CrossRef<'a> {
     pub conflicters: Vec<&'a str>,
 }
 
-pub fn parse_file(input: &str) -> IResult<&str, Vec<Line>> {
+pub fn parse_file(input: &str) -> IResult<&str, Vec<Line<'_>>> {
     let (input, _) = many0(parse_comment)(input)?;
     let (input, (lines, _)) = many_till(parse_line, eof)(input)?;
 
     Ok((input, lines))
 }
 
-pub fn parse_line(input: &str) -> IResult<&str, Line> {
+pub fn parse_line(input: &str) -> IResult<&str, Line<'_>> {
     let (input, codepoint) = parse_codepoint(input)?;
     let (input, _) = tag("^")(input)?;
     let (input, character) = parse_character(input)?;
@@ -148,7 +148,7 @@ pub fn parse_cross_ref_category(input: &str) -> IResult<&str, CrossRefCategory> 
     ))(input)
 }
 
-pub fn parse_cross_ref(input: &str) -> IResult<&str, CrossRef> {
+pub fn parse_cross_ref(input: &str) -> IResult<&str, CrossRef<'_>> {
     let (input, category) = parse_cross_ref_category(input)?;
     let (input, _) = space1(input)?;
     // command stops at first , or space

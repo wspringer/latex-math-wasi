@@ -16,7 +16,7 @@ pub struct Line<'a> {
     pub description: &'a str,
 }
 
-pub fn parse_file(input: &str) -> IResult<&str, Vec<Line>> {
+pub fn parse_file(input: &str) -> IResult<&str, Vec<Line<'_>>> {
     let (input, _) = many0(parse_comment)(input)?;
     let (input, _) = many0(line_ending)(input)?;
     nom::combinator::map(many_till(parse_line, line_ending), |(result, _)| result)(input)
@@ -27,7 +27,7 @@ fn parse_comment(input: &str) -> IResult<&str, ()> {
     nom::combinator::map(many_till(anychar, line_ending), |_| ())(input)
 }
 
-fn parse_line(input: &str) -> IResult<&str, Line> {
+fn parse_line(input: &str) -> IResult<&str, Line<'_>> {
     let (input, _) = tag("\\UnicodeMathSymbol{\"")(input)?;
     let (input, codepoint) = map_res(hex_digit1, |hex_digits: &str| {
         u32::from_str_radix(hex_digits, 16)
