@@ -36,7 +36,7 @@ jobs:
           targets: wasm32-wasip1, wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - uses: bytecodealliance/actions/wasmtime/setup@v1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
