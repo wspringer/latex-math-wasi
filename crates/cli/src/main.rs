@@ -5,6 +5,7 @@ use std::process::ExitCode;
 
 use latex_math_core::{Font, FontSet, Options, Style};
 use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_png::{to_png, PngOptions};
 use latex_math_svg::{to_svg, SvgOptions};
 
 const USAGE: &str = "\
@@ -18,10 +19,11 @@ options:
                      three are [display+text, script, scriptscript]; four are
                      [display, text, script, scriptscript].
   --levels D,T,S,SS  explicit font index (0-based, into the --font list) per level
-  --format svg|pdf   output format (default svg)
+  --format svg|pdf|png  output format (default svg)
   --size N           em size in user units (default 16)
   --style display|text
   --padding N        space around the formula, user units (default 0)
+  --scale N          png only: device pixels per user unit (default 1)
   -o, --output FILE  write here instead of stdout
   -h, --help
 ";
@@ -32,6 +34,7 @@ struct Args {
     size: f64,
     style: Style,
     padding: f64,
+    scale: f64,
     output: Option<String>,
     formula: Option<String>,
     levels: Option<[usize; 4]>,
@@ -44,6 +47,7 @@ fn parse_args() -> Result<Args, String> {
         size: 16.0,
         style: Style::Display,
         padding: 0.0,
+        scale: 1.0,
         output: None,
         formula: None,
         levels: None,
@@ -65,6 +69,11 @@ fn parse_args() -> Result<Args, String> {
                 args.padding = value("--padding", &mut it)?
                     .parse()
                     .map_err(|_| "--padding must be a number".to_string())?
+            }
+            "--scale" => {
+                args.scale = value("--scale", &mut it)?
+                    .parse()
+                    .map_err(|_| "--scale must be a number".to_string())?
             }
             "--style" => {
                 args.style = match value("--style", &mut it)?.as_str() {
@@ -159,6 +168,17 @@ fn run() -> Result<(), String> {
                 padding: args.padding,
             };
             to_pdf(&tree, &refs, &pdf_options).map_err(|e| e.to_string())?
+        }
+        "png" => {
+            let svg_options = SvgOptions {
+                padding: args.padding,
+                ..SvgOptions::default()
+            };
+            let png_options = PngOptions {
+                scale: args.scale,
+                ..PngOptions::default()
+            };
+            to_png(&tree, &refs, &svg_options, &png_options).map_err(|e| e.to_string())?
         }
         other => return Err(format!("unknown format {other}")),
     };

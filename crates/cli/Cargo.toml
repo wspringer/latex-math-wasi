@@ -16,3 +16,4 @@ path = "src/main.rs"
 latex-math-core.workspace = true
 latex-math-svg.workspace = true
 latex-math-pdf.workspace = true
+latex-math-png.workspace = true

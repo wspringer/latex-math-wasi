@@ -429,3 +429,26 @@ Proof it was a pure rename: the 54 golden SVGs are untouched, `scripts/check-was
 still reports wasip1 and browser output identical to native, insta snapshots were
 moved (`latex_wasi_core__…` → `latex_math_core__…`), and `--locked` builds pass with
 the lock file only renamed. Vendored ReX namespaces and `REX-UPSTREAM` unchanged.
+
+## PNG output (2026-08-29)
+
+Added for the planned MCP server, which wants an inline preview the agent can look at
+(as lilypond-mcp does) without a native rasterizer in the Node package. `latex-math-png`
+takes the SVG backend's output and rasterizes it with resvg — the same crate the golden
+visual diff already used as a dev-dependency — so the PNG shows exactly what the SVG
+says, and there is no third geometry backend to keep in sync. `default-features = false`
+on resvg: the `text` feature would pull in fontdb and system-font discovery (which we
+must never have in the engine), and the raster-image decoders are dead weight.
+
+`PngOptions { scale, background }`: `scale` is device pixels per user unit (2.0 = retina),
+`background` RGBA or transparent. Pixel size is `ceil(size × scale)`, minimum 1 px.
+CLI `--format png --scale N`; request field `"scale"`. Deterministic (checked in tests and
+by `check-wasm.sh`, which now compares png as well: wasip1 and browser bytes identical to
+native).
+
+Cost: resvg + usvg + tiny-skia + png compile to wasm without C (`cargo tree` scan still
+clean on both targets); the release modules grow from ~750 kB to ~1.7 MB (browser 1,742,490 bytes,
+wasip1 1,675,834 bytes) — tiny-skia is most of it. Acceptable for an npm package; if it
+ever matters, a direct RenderTree → tiny-skia backend would drop usvg (~300 kB). The "not blank" test compares the PNG's byte length with that of a
+transparent PNG of the same size — cheap, and enough: an image with glyphs never
+compresses to the empty image's size.

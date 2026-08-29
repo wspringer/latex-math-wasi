@@ -290,6 +290,7 @@ version = "0.1.0"
 dependencies = [
  "latex-math-core",
  "latex-math-pdf",
+ "latex-math-png",
  "latex-math-svg",
 ]
 
@@ -311,6 +312,15 @@ dependencies = [
  "pdf-writer",
  "subsetter",
  "ttf-parser",
+]
+
+[[package]]
+name = "latex-math-png"
+version = "0.1.0"
+dependencies = [
+ "latex-math-core",
+ "latex-math-svg",
+ "resvg",
 ]
 
 [[package]]
@@ -336,6 +346,7 @@ dependencies = [
  "base64 0.22.1",
  "latex-math-core",
  "latex-math-pdf",
+ "latex-math-png",
  "latex-math-svg",
  "serde",
  "serde_json",

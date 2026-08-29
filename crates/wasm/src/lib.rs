@@ -8,10 +8,11 @@
 //! ```json
 //! {
 //!   "tex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
-//!   "format": "svg",              // or "pdf"
+//!   "format": "svg",              // or "pdf", "png"
 //!   "font_size": 16,              // user units per em (SVG px / PDF pt); default 16
 //!   "style": "display",           // or "text"; default display
 //!   "padding": 0,                 // user units around the bbox; default 0
+//!   "scale": 1,                   // png only: device pixels per user unit; default 1
 //!   "fonts": ["<base64>", 1234],  // per font: base64 string, or byte length into the font blob
 //!   "levels": [0, 0, 1, 1],       // font index per level: display, text, script, scriptscript
 //!   "scales": [1, 1, 0.7, 0.5]    // optional; default from the text font's MATH table
@@ -26,6 +27,7 @@
 use base64::Engine;
 use latex_math_core::{Font, FontSet, Options, Style};
 use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_png::{to_png, PngOptions};
 use latex_math_svg::{to_svg, SvgOptions};
 use serde::Deserialize;
 
@@ -34,7 +36,7 @@ use serde::Deserialize;
 pub struct Request {
     /// LaTeX math fragment.
     pub tex: String,
-    /// `"svg"` or `"pdf"`.
+    /// `"svg"`, `"pdf"` or `"png"`.
     #[serde(default = "default_format")]
     pub format: String,
     /// User units per em.
@@ -46,6 +48,9 @@ pub struct Request {
     /// Space around the bounding box.
     #[serde(default)]
     pub padding: f64,
+    /// PNG only: device pixels per user unit.
+    #[serde(default = "default_scale")]
+    pub scale: f64,
     /// Fonts, inline or by length into the blob.
     pub fonts: Vec<FontSource>,
     /// Font index per level.
@@ -61,6 +66,9 @@ fn default_format() -> String {
 }
 fn default_font_size() -> f64 {
     16.0
+}
+fn default_scale() -> f64 {
+    1.0
 }
 fn default_style() -> String {
     "display".into()
@@ -155,6 +163,19 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &refs,
             &PdfOptions {
                 padding: request.padding,
+            },
+        )
+        .map_err(|e| e.to_string()),
+        "png" => to_png(
+            &tree,
+            &refs,
+            &SvgOptions {
+                padding: request.padding,
+                ..SvgOptions::default()
+            },
+            &PngOptions {
+                scale: request.scale,
+                ..PngOptions::default()
             },
         )
         .map_err(|e| e.to_string()),

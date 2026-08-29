@@ -7,11 +7,13 @@ compiles to `wasm32-wasip1`.
 nix develop
 cargo run -p latex-math-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
     'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}' > quadratic.svg
+cargo run -p latex-math-cli -- --font tests/fonts/STIXTwoMath-Regular.otf \
+    --format png --scale 2 -o quadratic.png 'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}'
 ```
 
 Crates: `core` (parser + OpenType MATH layout → render tree), `svg`, `pdf` (real text,
-subsetted CID fonts), `cli`, `wasm` (JSON request → bytes, C ABI for the browser),
-`wasi` (`wasm32-wasip1` command: request on stdin, bytes on stdout).
+subsetted CID fonts), `png` (the SVG rasterized with resvg; `--scale` for density), `cli`,
+`wasm` (JSON request → bytes, C ABI for the browser), `wasi` (`wasm32-wasip1` command: request on stdin, bytes on stdout).
 
 ```
 cargo build --release -p latex-math-wasi --target wasm32-wasip1

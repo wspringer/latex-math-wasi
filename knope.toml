@@ -15,6 +15,7 @@ versioned_files = [
   { path = "Cargo.lock", dependency = "latex-math-core" },
   { path = "Cargo.lock", dependency = "latex-math-svg" },
   { path = "Cargo.lock", dependency = "latex-math-pdf" },
+  { path = "Cargo.lock", dependency = "latex-math-png" },
   { path = "Cargo.lock", dependency = "latex-math-cli" },
   { path = "Cargo.lock", dependency = "latex-math-wasm" },
   { path = "Cargo.lock", dependency = "latex-math-wasi" },
