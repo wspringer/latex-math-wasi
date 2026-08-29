@@ -13,6 +13,9 @@
 //!   "style": "display",           // or "text"; default display
 //!   "padding": 0,                 // user units around the bbox; default 0
 //!   "scale": 1,                   // png only: device pixels per user unit; default 1
+//!   "color": {"cmyk": [0,0,0,1]}, // or {"gray": g}, {"rgb": [r,g,b]},
+//!                                 // {"spot": {"name": "PANTONE 300 C", "tint": 1, "cmyk": [..]}}
+//!                                 // pdf: any; svg/png: gray or rgb only. Default: pdf 100% K, svg #000
 //!   "fonts": ["<base64>", 1234],  // per font: base64 string, or byte length into the font blob
 //!   "levels": [0, 0, 1, 1],       // font index per level: display, text, script, scriptscript
 //!   "scales": [1, 1, 0.7, 0.5]    // optional; default from the text font's MATH table
@@ -26,7 +29,7 @@
 
 use base64::Engine;
 use latex_math_core::{Font, FontSet, Options, Style};
-use latex_math_pdf::{to_pdf, PdfOptions};
+use latex_math_pdf::{to_pdf, Color, PdfOptions};
 use latex_math_png::{to_png, PngOptions};
 use latex_math_svg::{to_svg, SvgOptions};
 use serde::Deserialize;
@@ -51,6 +54,9 @@ pub struct Request {
     /// PNG only: device pixels per user unit.
     #[serde(default = "default_scale")]
     pub scale: f64,
+    /// Fill colour. PDF takes any of these; SVG/PNG only `gray` and `rgb`.
+    #[serde(default)]
+    pub color: Option<ColorSpec>,
     /// Fonts, inline or by length into the blob.
     pub fonts: Vec<FontSource>,
     /// Font index per level.
@@ -72,6 +78,61 @@ fn default_scale() -> f64 {
 }
 fn default_style() -> String {
     "display".into()
+}
+
+/// A fill colour in the request: `{"gray": 0}`, `{"rgb": [r, g, b]}`,
+/// `{"cmyk": [c, m, y, k]}` or `{"spot": {"name": "PANTONE 300 C", "tint": 1, "cmyk": [...]}}`,
+/// components 0–1.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorSpec {
+    /// `DeviceGray`.
+    Gray(f64),
+    /// `DeviceRGB`.
+    Rgb([f64; 3]),
+    /// `DeviceCMYK`.
+    Cmyk([f64; 4]),
+    /// A named spot colour with a CMYK alternate.
+    Spot {
+        /// Colorant name.
+        name: String,
+        /// 0–1, default 1.
+        #[serde(default = "default_tint")]
+        tint: f64,
+        /// Alternate in `DeviceCMYK`.
+        cmyk: [f64; 4],
+    },
+}
+
+fn default_tint() -> f64 {
+    1.0
+}
+
+impl From<ColorSpec> for Color {
+    fn from(c: ColorSpec) -> Self {
+        match c {
+            ColorSpec::Gray(g) => Color::Gray(g),
+            ColorSpec::Rgb(c) => Color::Rgb(c),
+            ColorSpec::Cmyk(c) => Color::Cmyk(c),
+            ColorSpec::Spot { name, tint, cmyk } => Color::Spot { name, tint, cmyk },
+        }
+    }
+}
+
+/// SVG/PNG can only carry sRGB: gray and rgb map to `#rrggbb`, cmyk and spot are refused.
+fn svg_fill(color: Option<&Color>) -> Result<String, String> {
+    let hex = |c: [f64; 3]| {
+        let b = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        format!("#{:02x}{:02x}{:02x}", b(c[0]), b(c[1]), b(c[2]))
+    };
+    match color {
+        None => Ok(SvgOptions::default().fill),
+        Some(Color::Gray(g)) => Ok(hex([*g, *g, *g])),
+        Some(Color::Rgb(c)) => Ok(hex(*c)),
+        Some(Color::Cmyk(_)) | Some(Color::Spot { .. }) => {
+            Err("cmyk and spot colours are only possible with format \"pdf\"".into())
+        }
+    }
 }
 
 /// Where a font's bytes come from.
@@ -147,12 +208,14 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
     let tree =
         latex_math_core::render(&request.tex, &set, &options).map_err(|e| format!("{e:?}"))?;
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
+    let color: Option<Color> = request.color.map(Color::from);
     match request.format.as_str() {
         "svg" => to_svg(
             &tree,
             &refs,
             &SvgOptions {
                 padding: request.padding,
+                fill: svg_fill(color.as_ref())?,
                 ..SvgOptions::default()
             },
         )
@@ -163,6 +226,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &refs,
             &PdfOptions {
                 padding: request.padding,
+                color: color.unwrap_or_default(),
             },
         )
         .map_err(|e| e.to_string()),
@@ -171,6 +235,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &refs,
             &SvgOptions {
                 padding: request.padding,
+                fill: svg_fill(color.as_ref())?,
                 ..SvgOptions::default()
             },
             &PngOptions {

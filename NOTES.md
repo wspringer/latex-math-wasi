@@ -474,3 +474,30 @@ with a guessed `xHeightRatio`; we have the real font, so this is exact.
 - The SVG root gets `style="vertical-align:-<depth>px"`, MathJax's convention, so the SVG
   alone is enough for HTML embedding. All 54 goldens changed by exactly that one header
   line; rasters are unaffected (same viewBox, same content).
+
+## PDF colour (2026-08-29)
+
+The user's reason to want PDF over SVG for InDesign: SVG is sRGB only, print wants CMYK
+values or a spot colour. Until now the content stream set no colour at all, which means
+PDF's default `DeviceGray 0` — black, but by accident and in a space that colour
+management may treat differently from body text.
+
+`PdfOptions.color: Color` — `Gray`, `Rgb`, `Cmyk`, or `Spot { name, tint, cmyk }`. The
+fill operator is the first thing in the content stream and applies to glyphs and rules
+alike (`g`/`rg`/`k`, or `/CS0 cs t scn`). A spot colour is a `[/Separation /Name
+/DeviceCMYK fn]` colour space in the page resources, with a type-2 (exponential, N = 1)
+tint transform from `[0 0 0 0]` to the given CMYK, so a device without the colorant
+renders the alternate; pdf-writer escapes the name (`/PANTONE#20300#20C`). Default is
+`Cmyk [0 0 0 1]`: 100 % K, what surrounding body text is on a press.
+
+Verified: qpdf `--check` clean for gray/cmyk/spot; poppler renders the spot file in the
+alternate colour; the colour line is the only difference between two PDFs of the same
+formula (`colour_does_not_move_anything`). Components are validated to 0–1 and a spot
+colour must have a name (`PdfError::BadColor`).
+
+CLI `--color gray:K | rgb:R,G,B | cmyk:C,M,Y,K | spot:NAME:TINT:C,M,Y,K | #rrggbb`; request
+`"color": {"gray": g} | {"rgb": [..]} | {"cmyk": [..]} | {"spot": {"name", "tint", "cmyk"}}`.
+SVG/PNG accept gray/rgb (mapped to `#rrggbb`) and refuse cmyk/spot with a clear error
+rather than converting silently — the whole point is that the numbers stay the numbers.
+Not done: ICC-based spaces and PDF/X output intents; InDesign does not need them for a
+placed graphic.

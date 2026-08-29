@@ -20,6 +20,11 @@ Inline placement: `--format metrics` (request `"format": "metrics"`) returns
 `depth` is baseline to bottom edge, so an inline image sits right with
 `vertical-align: -depth`. The SVG carries the same value in its root `style`.
 
+Colour: `--color` (request `"color"`) sets the fill. PDF takes `gray:K`, `rgb:R,G,B`,
+`cmyk:C,M,Y,K` or a spot colour `spot:NAME:TINT:C,M,Y,K` (a `Separation` colour space with
+a CMYK alternate — InDesign shows it as a swatch); default is 100 % K. SVG/PNG are sRGB
+only: `gray`, `rgb` or `#rrggbb`.
+
 ```
 cargo build --release -p latex-math-wasi --target wasm32-wasip1
 wasmtime run target/wasm32-wasip1/release/latex-math-wasi.wasm < request.json > out.svg

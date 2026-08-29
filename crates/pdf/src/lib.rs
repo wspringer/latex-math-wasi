@@ -3,7 +3,7 @@
 //! Glyphs are real text: one Type0/CID font per used font, embedded as a subset
 //! (`CIDFontType0C` for CFF outlines, `FontFile2` for TrueType), CIDs = subset glyph ids,
 //! a ToUnicode CMap where the font's cmap knows the glyph. The content stream is only
-//! `Tf`/`Td`/`Tj` for glyphs and `re f` for rules. Output is deterministic: no dates, no
+//! a fill colour, `Tf`/`Td`/`Tj` for glyphs and `re f` for rules. Output is deterministic: no dates, no
 //! random ids, subset tags derived from the glyph set.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,13 +18,87 @@ use subsetter::GlyphRemapper;
 pub struct PdfOptions {
     /// Extra space around the bounding box, in user units (PDF points).
     pub padding: f64,
+    /// Fill colour for glyphs and rules.
+    pub color: Color,
 }
 
 impl Default for PdfOptions {
     fn default() -> Self {
-        PdfOptions { padding: 0.0 }
+        PdfOptions {
+            padding: 0.0,
+            color: Color::default(),
+        }
     }
 }
+
+/// The fill colour, in the colour space a print workflow expects. This is the reason to
+/// prefer PDF over SVG: SVG is sRGB only, a PDF can carry CMYK values or a named spot
+/// colour that InDesign picks up as a swatch when the file is placed.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Color {
+    /// `DeviceGray`; 0 is black, 1 is white.
+    Gray(f64),
+    /// `DeviceRGB`, components 0–1.
+    Rgb([f64; 3]),
+    /// `DeviceCMYK`, components 0–1.
+    Cmyk([f64; 4]),
+    /// A `Separation` colour space: a named colorant (an InDesign swatch name,
+    /// `"PANTONE 300 C"`, …) at `tint` 0–1, with a CMYK alternate for devices that do not
+    /// have the colorant.
+    Spot {
+        /// Colorant name, as the printer and the layout application know it.
+        name: String,
+        /// 0–1; 1 is the full colour.
+        tint: f64,
+        /// Alternate rendering in `DeviceCMYK`.
+        cmyk: [f64; 4],
+    },
+}
+
+impl Default for Color {
+    /// 100 % K — plain black on a press, and what surrounding body text usually is.
+    fn default() -> Self {
+        Color::Cmyk([0.0, 0.0, 0.0, 1.0])
+    }
+}
+
+impl Color {
+    fn validate(&self) -> Result<(), PdfError> {
+        let unit = |v: f64, what: &str| {
+            if (0.0..=1.0).contains(&v) {
+                Ok(())
+            } else {
+                Err(PdfError::BadColor(format!("{what} {v} is not within 0–1")))
+            }
+        };
+        match self {
+            Color::Gray(g) => unit(*g, "gray"),
+            Color::Rgb(c) => c.iter().try_for_each(|&v| unit(v, "rgb component")),
+            Color::Cmyk(c) => c.iter().try_for_each(|&v| unit(v, "cmyk component")),
+            Color::Spot { name, tint, cmyk } => {
+                if name.is_empty() {
+                    return Err(PdfError::BadColor("spot colour needs a name".into()));
+                }
+                unit(*tint, "tint")?;
+                cmyk.iter().try_for_each(|&v| unit(v, "cmyk component"))
+            }
+        }
+    }
+
+    /// The nonstroking-colour operator(s) for the content stream.
+    fn fill_operator(&self) -> String {
+        let f = |v: &f64| fixed(*v);
+        match self {
+            Color::Gray(g) => format!("{} g\n", f(g)),
+            Color::Rgb(c) => format!("{} {} {} rg\n", f(&c[0]), f(&c[1]), f(&c[2])),
+            Color::Cmyk(c) => format!("{} {} {} {} k\n", f(&c[0]), f(&c[1]), f(&c[2]), f(&c[3])),
+            Color::Spot { tint, .. } => format!("/{SPOT_CS} cs {} scn\n", f(tint)),
+        }
+    }
+}
+
+/// Resource name of the Separation colour space, when one is used.
+const SPOT_CS: &str = "CS0";
 
 /// Errors from PDF generation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +109,8 @@ pub enum PdfError {
     Subset(usize, String),
     /// The subset font has neither a `CFF ` nor a `glyf` table.
     NoOutlines(usize),
+    /// A colour component is out of range, or a spot colour has no name.
+    BadColor(String),
 }
 
 impl std::fmt::Display for PdfError {
@@ -46,6 +122,7 @@ impl std::fmt::Display for PdfError {
             ),
             PdfError::Subset(i, e) => write!(f, "font #{i}: subsetting failed: {e}"),
             PdfError::NoOutlines(i) => write!(f, "font #{i}: no CFF or glyf outlines"),
+            PdfError::BadColor(e) => write!(f, "colour: {e}"),
         }
     }
 }
@@ -102,6 +179,7 @@ pub fn to_pdf(
     fonts: &[&Font<'_>],
     options: &PdfOptions,
 ) -> Result<Vec<u8>, PdfError> {
+    options.color.validate()?;
     // Glyph sets per font, in font-index order.
     let mut used: BTreeMap<usize, BTreeSet<u16>> = BTreeMap::new();
     for g in &tree.glyphs {
@@ -149,6 +227,10 @@ pub fn to_pdf(
     for _ in &embedded {
         font_refs.push(alloc());
     }
+    let spot_id = match &options.color {
+        Color::Spot { .. } => Some(alloc()),
+        _ => None,
+    };
     {
         let mut p = pdf.page(page_id);
         p.media_box(Rect::new(0.0, 0.0, page.width as f32, page.height as f32));
@@ -160,13 +242,28 @@ pub fn to_pdf(
             fd.pair(Name(font_name(e.index).as_bytes()), *r);
         }
         fd.finish();
+        if let Some(id) = spot_id {
+            res.color_spaces().pair(Name(SPOT_CS.as_bytes()), id);
+        }
         res.finish();
         p.finish();
+    }
+    if let (Some(id), Color::Spot { name, cmyk, .. }) = (spot_id, &options.color) {
+        // [/Separation /Name /DeviceCMYK <tint transform>]: the transform maps tint t to
+        // t × cmyk, an exponential function with N = 1 (linear).
+        let mut sep = pdf.color_space(id).separation(Name(name.as_bytes()));
+        sep.alternate_color_space().device_cmyk();
+        sep.tint_exponential()
+            .domain([0.0, 1.0])
+            .c0([0.0, 0.0, 0.0, 0.0])
+            .c1(cmyk.map(|v| v as f32))
+            .n(1.0);
+        sep.finish();
     }
 
     // Content stream, written by hand: only Tf/Td/Tj and re/f, hex glyph strings, fixed
     // 3-decimal coordinates (pdf-writer's `Str` would pick literal-with-octal-escapes).
-    let mut content = String::new();
+    let mut content = options.color.fill_operator();
     if !tree.glyphs.is_empty() {
         content.push_str("BT\n");
         let mut current: Option<(usize, f64)> = None;
