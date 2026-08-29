@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use latex_math_core::{Font, RenderTree};
+use latex_math_core::{Font, Paint, RenderTree, RGBA};
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, Str, TextStr};
 use subsetter::GlyphRemapper;
@@ -20,6 +20,8 @@ pub struct PdfOptions {
     pub padding: f64,
     /// Fill colour for glyphs and rules.
     pub color: Color,
+    /// What each palette name (`\color{name}` with `name` in `Options::palette`) is.
+    pub palette: BTreeMap<String, Color>,
 }
 
 impl Default for PdfOptions {
@@ -27,6 +29,7 @@ impl Default for PdfOptions {
         PdfOptions {
             padding: 0.0,
             color: Color::default(),
+            palette: BTreeMap::new(),
         }
     }
 }
@@ -85,20 +88,23 @@ impl Color {
         }
     }
 
-    /// The nonstroking-colour operator(s) for the content stream.
-    fn fill_operator(&self) -> String {
+    /// The nonstroking-colour operator(s) for the content stream. `spot_cs` is the
+    /// resource name of this colour's Separation space, when it is a spot colour.
+    fn fill_operator(&self, spot_cs: &str) -> String {
         let f = |v: &f64| fixed(*v);
         match self {
             Color::Gray(g) => format!("{} g\n", f(g)),
             Color::Rgb(c) => format!("{} {} {} rg\n", f(&c[0]), f(&c[1]), f(&c[2])),
             Color::Cmyk(c) => format!("{} {} {} {} k\n", f(&c[0]), f(&c[1]), f(&c[2]), f(&c[3])),
-            Color::Spot { tint, .. } => format!("/{SPOT_CS} cs {} scn\n", f(tint)),
+            Color::Spot { tint, .. } => format!("/{spot_cs} cs {} scn\n", f(tint)),
         }
     }
 }
 
-/// Resource name of the Separation colour space, when one is used.
-const SPOT_CS: &str = "CS0";
+/// Resource name of the `i`-th Separation colour space.
+fn spot_cs_name(i: usize) -> String {
+    format!("CS{i}")
+}
 
 /// Errors from PDF generation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +117,8 @@ pub enum PdfError {
     NoOutlines(usize),
     /// A colour component is out of range, or a spot colour has no name.
     BadColor(String),
+    /// The tree uses a palette name that `PdfOptions::palette` does not define.
+    UnknownColor(String),
 }
 
 impl std::fmt::Display for PdfError {
@@ -123,6 +131,7 @@ impl std::fmt::Display for PdfError {
             PdfError::Subset(i, e) => write!(f, "font #{i}: subsetting failed: {e}"),
             PdfError::NoOutlines(i) => write!(f, "font #{i}: no CFF or glyf outlines"),
             PdfError::BadColor(e) => write!(f, "colour: {e}"),
+            PdfError::UnknownColor(n) => write!(f, "palette has no colour named {n:?}"),
         }
     }
 }
@@ -180,6 +189,48 @@ pub fn to_pdf(
     options: &PdfOptions,
 ) -> Result<Vec<u8>, PdfError> {
     options.color.validate()?;
+    // Every colour the content stream will use: the document colour, then one per paint
+    // index in the tree (palette names resolved through `options.palette`, RGBA
+    // literals as DeviceRGB — alpha is ignored; fully transparent paints never reach the
+    // tree).
+    let mut colors: Vec<Color> = Vec::with_capacity(tree.paints.len() + 1);
+    colors.push(options.color.clone());
+    for paint in &tree.paints {
+        colors.push(match paint {
+            Paint::Named(name) => match options.palette.get(&**name) {
+                Some(c) => {
+                    c.validate()?;
+                    c.clone()
+                }
+                None => return Err(PdfError::UnknownColor(name.to_string())),
+            },
+            Paint::Rgba(RGBA(r, g, b, _)) => Color::Rgb([
+                f64::from(*r) / 255.0,
+                f64::from(*g) / 255.0,
+                f64::from(*b) / 255.0,
+            ]),
+        });
+    }
+    // Distinct spot colours get a Separation resource each; `spot_of[i]` is the resource
+    // name for `colors[i]` (empty when not a spot colour).
+    let mut spots: Vec<(String, [f64; 4])> = Vec::new();
+    let mut spot_of: Vec<String> = Vec::with_capacity(colors.len());
+    for c in &colors {
+        spot_of.push(match c {
+            Color::Spot { name, cmyk, .. } => {
+                let key = (name.clone(), *cmyk);
+                let i = match spots.iter().position(|s| *s == key) {
+                    Some(i) => i,
+                    None => {
+                        spots.push(key);
+                        spots.len() - 1
+                    }
+                };
+                spot_cs_name(i)
+            }
+            _ => String::new(),
+        });
+    }
     // Glyph sets per font, in font-index order.
     let mut used: BTreeMap<usize, BTreeSet<u16>> = BTreeMap::new();
     for g in &tree.glyphs {
@@ -227,10 +278,7 @@ pub fn to_pdf(
     for _ in &embedded {
         font_refs.push(alloc());
     }
-    let spot_id = match &options.color {
-        Color::Spot { .. } => Some(alloc()),
-        _ => None,
-    };
+    let spot_ids: Vec<Ref> = spots.iter().map(|_| alloc()).collect();
     {
         let mut p = pdf.page(page_id);
         p.media_box(Rect::new(0.0, 0.0, page.width as f32, page.height as f32));
@@ -242,16 +290,20 @@ pub fn to_pdf(
             fd.pair(Name(font_name(e.index).as_bytes()), *r);
         }
         fd.finish();
-        if let Some(id) = spot_id {
-            res.color_spaces().pair(Name(SPOT_CS.as_bytes()), id);
+        if !spot_ids.is_empty() {
+            let mut cs = res.color_spaces();
+            for (i, id) in spot_ids.iter().enumerate() {
+                cs.pair(Name(spot_cs_name(i).as_bytes()), *id);
+            }
+            cs.finish();
         }
         res.finish();
         p.finish();
     }
-    if let (Some(id), Color::Spot { name, cmyk, .. }) = (spot_id, &options.color) {
+    for ((name, cmyk), id) in spots.iter().zip(&spot_ids) {
         // [/Separation /Name /DeviceCMYK <tint transform>]: the transform maps tint t to
         // t × cmyk, an exponential function with N = 1 (linear).
-        let mut sep = pdf.color_space(id).separation(Name(name.as_bytes()));
+        let mut sep = pdf.color_space(*id).separation(Name(name.as_bytes()));
         sep.alternate_color_space().device_cmyk();
         sep.tint_exponential()
             .domain([0.0, 1.0])
@@ -263,12 +315,20 @@ pub fn to_pdf(
 
     // Content stream, written by hand: only Tf/Td/Tj and re/f, hex glyph strings, fixed
     // 3-decimal coordinates (pdf-writer's `Str` would pick literal-with-octal-escapes).
-    let mut content = options.color.fill_operator();
+    // `colors[0]` is the document colour; a glyph or rule with paint `i` uses `colors[i+1]`.
+    let color_index = |paint: Option<usize>| paint.map_or(0, |i| i + 1);
+    let mut current_color = 0usize;
+    let mut content = colors[0].fill_operator(&spot_of[0]);
     if !tree.glyphs.is_empty() {
         content.push_str("BT\n");
         let mut current: Option<(usize, f64)> = None;
         let (mut lx, mut ly) = (0.0f64, 0.0f64);
         for g in &tree.glyphs {
+            let ci = color_index(g.paint);
+            if ci != current_color {
+                content.push_str(&colors[ci].fill_operator(&spot_of[ci]));
+                current_color = ci;
+            }
             if current != Some((g.font, g.size)) {
                 content.push_str(&format!("/{} {} Tf\n", font_name(g.font), fixed(g.size)));
                 current = Some((g.font, g.size));
@@ -288,6 +348,11 @@ pub fn to_pdf(
         content.push_str("ET\n");
     }
     for r in &tree.rules {
+        let ci = color_index(r.paint);
+        if ci != current_color {
+            content.push_str(&colors[ci].fill_operator(&spot_of[ci]));
+            current_color = ci;
+        }
         content.push_str(&format!(
             "{} {} {} {} re f\n",
             fixed(page.x(r.x)),

@@ -18,6 +18,7 @@ fn pdf_with(color: Color) -> Result<Vec<u8>, PdfError> {
         &PdfOptions {
             padding: 1.0,
             color,
+            ..PdfOptions::default()
         },
     )
 }
@@ -104,4 +105,82 @@ fn colour_does_not_move_anything() {
     let b = pdf_with(Color::Rgb([0.0, 0.0, 1.0])).unwrap();
     let strip = |s: String| s.lines().skip(1).collect::<Vec<_>>().join("\n");
     assert_eq!(strip(content(&a)), strip(content(&b)));
+}
+
+#[test]
+fn palette_switches_colour_per_glyph_and_shares_separations() {
+    use std::collections::BTreeMap;
+    let bytes = std::fs::read(corpus::font_path("STIXTwoMath-Regular.otf")).unwrap();
+    let font = Font::parse(&bytes).unwrap();
+    let options = Options {
+        palette: vec!["accent".into(), "muted".into()],
+        ..Options::default()
+    };
+    let tree = latex_math_core::render(
+        r"\color{accent}{x} y \color{accent}{\frac{a}{b}} \color{muted}{z} \color{red}{w}",
+        &FontSet::single(&font),
+        &options,
+    )
+    .unwrap();
+    let mut palette = BTreeMap::new();
+    palette.insert(
+        "accent".to_string(),
+        Color::Spot {
+            name: "PANTONE 300 C".into(),
+            tint: 1.0,
+            cmyk: [1.0, 0.44, 0.0, 0.0],
+        },
+    );
+    palette.insert("muted".to_string(), Color::Cmyk([0.0, 0.0, 0.0, 0.5]));
+    let pdf = to_pdf(
+        &tree,
+        &[&font],
+        &PdfOptions {
+            padding: 0.0,
+            color: Color::default(),
+            palette,
+        },
+    )
+    .unwrap();
+    let c = content(&pdf);
+    let ops: Vec<&str> = c
+        .lines()
+        .filter(|l| l.ends_with(" k") || l.ends_with(" scn") || l.ends_with(" rg"))
+        .collect();
+    assert_eq!(
+        ops,
+        [
+            "0 0 0 1 k",     // document colour
+            "/CS0 cs 1 scn", // x
+            "0 0 0 1 k",     // y
+            "/CS0 cs 1 scn", // a, b
+            "0 0 0 0.5 k",   // z
+            "1 0 0 rg",      // w (CSS red → DeviceRGB)
+            "/CS0 cs 1 scn", // the fraction bar, after ET
+        ],
+        "{c}"
+    );
+    let text = String::from_utf8_lossy(&pdf);
+    assert_eq!(
+        text.matches("/Separation").count(),
+        1,
+        "one Separation for one spot"
+    );
+    assert!(!text.contains("/CS1"), "the same spot must reuse CS0");
+}
+
+#[test]
+fn palette_name_missing_from_pdf_palette_is_an_error() {
+    let bytes = std::fs::read(corpus::font_path("STIXTwoMath-Regular.otf")).unwrap();
+    let font = Font::parse(&bytes).unwrap();
+    let options = Options {
+        palette: vec!["accent".into()],
+        ..Options::default()
+    };
+    let tree =
+        latex_math_core::render(r"\color{accent}{x}", &FontSet::single(&font), &options).unwrap();
+    assert!(matches!(
+        to_pdf(&tree, &[&font], &PdfOptions::default()),
+        Err(PdfError::UnknownColor(_))
+    ));
 }

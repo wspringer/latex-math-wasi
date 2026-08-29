@@ -21,13 +21,13 @@
 <path id="g0-3856" d="M1854 -958L1854 -1093L1347 -1093C1199 -1093 982 -1173 949 -1356L895 -1356C862 -1173 639 -1093 491 -1093L-10 -1093L-10 -958L374 -958C619 -958 814 -1019 920 -1249L924 -1249C1030 -1019 1219 -958 1464 -958Z"/>
 </defs>
 <g fill="#000">
-<use xlink:href="#g0-82" transform="translate(76.348 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-118" transform="translate(85.012 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-98" transform="translate(91.012 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-115" transform="translate(96.34 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-117" transform="translate(100.336 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-106" transform="translate(103.672 -31.808) scale(0.012)"/>
-<use xlink:href="#g0-100" transform="translate(107.008 -31.808) scale(0.012)"/>
+<use xlink:href="#g0-82" transform="translate(76.348 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-118" transform="translate(85.012 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-98" transform="translate(91.012 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-115" transform="translate(96.34 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-117" transform="translate(100.336 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-106" transform="translate(103.672 -31.808) scale(0.012)" fill="#808080"/>
+<use xlink:href="#g0-100" transform="translate(107.008 -31.808) scale(0.012)" fill="#808080"/>
 <use xlink:href="#g0-3851" transform="translate(1.062 -5.312) scale(0.016)"/>
 <use xlink:href="#g0-3855" transform="translate(14.55 -5.312) scale(0.016)"/>
 <use xlink:href="#g0-3855" transform="translate(18.886 -5.312) scale(0.016)"/>

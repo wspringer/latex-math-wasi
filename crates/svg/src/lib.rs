@@ -7,7 +7,8 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
-use latex_math_core::{Font, RenderTree};
+use latex_math_core::{Font, Paint, RenderTree, RGBA};
+use std::collections::BTreeMap;
 
 /// SVG output options.
 #[derive(Debug, Clone, PartialEq)]
@@ -18,6 +19,9 @@ pub struct SvgOptions {
     pub padding: f64,
     /// Fill colour for glyphs and rules (any SVG paint).
     pub fill: String,
+    /// What each palette name (`\color{name}` with `name` in `Options::palette`) is in
+    /// SVG terms: any SVG paint, e.g. `#1f5fbf`.
+    pub palette: BTreeMap<String, String>,
 }
 
 impl Default for SvgOptions {
@@ -26,6 +30,7 @@ impl Default for SvgOptions {
             precision: 3,
             padding: 0.0,
             fill: "#000".to_string(),
+            palette: BTreeMap::new(),
         }
     }
 }
@@ -35,6 +40,8 @@ impl Default for SvgOptions {
 pub enum SvgError {
     /// A glyph instance referenced a font index outside `fonts`.
     MissingFont(usize),
+    /// The tree uses a palette name that `SvgOptions::palette` does not define.
+    UnknownColor(String),
 }
 
 impl std::fmt::Display for SvgError {
@@ -44,6 +51,7 @@ impl std::fmt::Display for SvgError {
                 f,
                 "render tree references font #{i}, which was not supplied"
             ),
+            SvgError::UnknownColor(n) => write!(f, "palette has no colour named {n:?}"),
         }
     }
 }
@@ -61,6 +69,33 @@ pub fn to_svg(
             return Err(SvgError::MissingFont(g.font));
         }
     }
+    // Fill attribute per paint index: `fill="…"` (+ `fill-opacity` for translucent
+    // literals), or empty for the document colour.
+    let mut fills: Vec<String> = Vec::with_capacity(tree.paints.len());
+    for paint in &tree.paints {
+        fills.push(match paint {
+            Paint::Named(name) => match options.palette.get(&**name) {
+                Some(value) => format!(r#" fill="{value}""#),
+                None => return Err(SvgError::UnknownColor(name.to_string())),
+            },
+            Paint::Rgba(RGBA(r, g, b, a)) => {
+                let mut s = format!(r##" fill="#{r:02x}{g:02x}{b:02x}""##);
+                if *a != 255 {
+                    s.push_str(&format!(
+                        r#" fill-opacity="{}""#,
+                        format_fixed(f64::from(*a) / 255.0, 3)
+                    ));
+                }
+                s
+            }
+        });
+    }
+    let fill_attr = |paint: Option<usize>| -> &str {
+        match paint {
+            Some(i) => &fills[i],
+            None => "",
+        }
+    };
     let p = options.precision;
     let fmt = |v: f64| format_fixed(v, p);
 
@@ -109,23 +144,25 @@ pub fn to_svg(
         let scale = g.size / upem;
         writeln!(
             out,
-            r##"<use xlink:href="#g{}-{}" transform="translate({} {}) scale({})"/>"##,
+            r##"<use xlink:href="#g{}-{}" transform="translate({} {}) scale({})"{}/>"##,
             g.font,
             g.gid,
             fmt(g.x),
             fmt(g.y),
-            format_fixed(scale, 6)
+            format_fixed(scale, 6),
+            fill_attr(g.paint)
         )
         .unwrap();
     }
     for r in &tree.rules {
         writeln!(
             out,
-            r#"<rect x="{}" y="{}" width="{}" height="{}"/>"#,
+            r#"<rect x="{}" y="{}" width="{}" height="{}"{}/>"#,
             fmt(r.x),
             fmt(r.y),
             fmt(r.width),
-            fmt(r.height)
+            fmt(r.height),
+            fill_attr(r.paint)
         )
         .unwrap();
     }

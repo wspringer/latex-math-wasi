@@ -22,18 +22,24 @@ pub mod tree;
 pub use error::Error;
 pub use font::backend::ttf_parser::TtfMathFont as Font;
 pub use layout::Style;
+pub use parser::color::{Paint, RGBA};
 pub use tree::{BBox, GlyphInstance, ImageBox, RenderTree, Rule};
 
 use layout::engine::LayoutBuilder;
 use render::Renderer;
 
 /// Layout options.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Options {
     /// Em size in user units. Every coordinate in the render tree is in these units.
     pub font_size: f64,
     /// Starting math style (`Display` for `$$…$$`, `Text` for `$…$`).
     pub style: Style,
+    /// Colour names `\color{name}{…}` may use besides the CSS names. They are kept as
+    /// [`Paint::Named`] in the tree for the backend to resolve — this is how a formula
+    /// gets a CMYK or spot colour: the name is defined by the caller, not by the source.
+    /// A palette name shadows a CSS name.
+    pub palette: Vec<String>,
 }
 
 impl Default for Options {
@@ -41,6 +47,7 @@ impl Default for Options {
         Options {
             font_size: 16.0,
             style: Style::Display,
+            palette: Vec::new(),
         }
     }
 }
@@ -132,9 +139,9 @@ pub fn render(tex: &str, fonts: &FontSet<'_, '_>, options: &Options) -> Result<R
         .layout(&nodes)?;
     let size = layout.size();
     let bbox = layout.full_bounding_box();
-    let mut backend = tree::TreeBackend::new(fonts.fonts().iter().collect());
+    let mut backend = tree::TreeBackend::new(fonts.fonts().iter().collect(), &options.palette);
     Renderer::new().render(&layout, &mut backend);
-    let mut tree = backend.finish();
+    let mut tree = backend.finish().map_err(Error::UnknownColor)?;
     tree.width = size.width;
     tree.height = size.height;
     tree.depth = size.depth;

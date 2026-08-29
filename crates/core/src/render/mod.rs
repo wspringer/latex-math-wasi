@@ -29,7 +29,7 @@ use crate::font::common::GlyphId;
 use crate::font::MathFont;
 use crate::layout::engine::LayoutBuilder;
 use crate::layout::{Alignment, Grid, Layout, LayoutNode, LayoutVariant};
-pub use crate::parser::color::RGBA;
+pub use crate::parser::color::{Paint, RGBA};
 
 /// Context used for rendering.
 pub struct Renderer {
@@ -109,7 +109,7 @@ pub trait GraphicsBackend {
     /// Draws a filled rectangle whose top-left corner is at `pos`. Used to draw fraction bars and radicals.
     fn rule(&mut self, pos: Cursor, width: f64, height: f64);
     /// Makes `color` the current used color. The color previously in use is restored with [`GraphicsBackend::end_color`].
-    fn begin_color(&mut self, color: RGBA);
+    fn begin_color(&mut self, color: &Paint);
     /// Restores the previously used color. If there were no previous color, this function should return silently and not panic.
     fn end_color(&mut self);
 }
@@ -321,7 +321,7 @@ impl Renderer {
             ),
 
             LayoutVariant::Color(ref clr) => {
-                out.begin_color(clr.color);
+                out.begin_color(&clr.color);
                 self.render_hbox(
                     out,
                     pos,

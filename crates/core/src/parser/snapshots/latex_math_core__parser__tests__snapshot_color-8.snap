@@ -1,9 +1,35 @@
 ---
-source: src/parser/mod.rs
+source: crates/core/src/parser/mod.rs
 expression: "parse(r\"\\color{bred}{1+1}\")"
 ---
-Err(
-    UnrecognizedColor(
-        "bred",
-    ),
+Ok(
+    [
+        Color(
+            Color {
+                color: Named(
+                    "bred",
+                ),
+                inner: [
+                    Symbol(
+                        Symbol {
+                            codepoint: '1',
+                            atom_type: Alpha,
+                        },
+                    ),
+                    Symbol(
+                        Symbol {
+                            codepoint: '+',
+                            atom_type: Binary,
+                        },
+                    ),
+                    Symbol(
+                        Symbol {
+                            codepoint: '1',
+                            atom_type: Alpha,
+                        },
+                    ),
+                ],
+            },
+        ),
+    ],
 )

@@ -2,7 +2,7 @@
 
 use crate::font::common::GlyphId;
 use crate::font::MathFont;
-use crate::render::{Backend, Cursor, FontBackend, GraphicsBackend, RGBA};
+use crate::render::{Backend, Cursor, FontBackend, GraphicsBackend, Paint, RGBA};
 
 /// One glyph to draw.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -17,6 +17,8 @@ pub struct GlyphInstance {
     pub y: f64,
     /// Em size in user units at which to draw the glyph (font size × any style scaling).
     pub size: f64,
+    /// Index into [`RenderTree::paints`], or `None` for the document colour.
+    pub paint: Option<usize>,
 }
 
 /// A filled rectangle (fraction bars, radical rules, `\rule`).
@@ -30,6 +32,8 @@ pub struct Rule {
     pub width: f64,
     /// Height.
     pub height: f64,
+    /// Index into [`RenderTree::paints`], or `None` for the document colour.
+    pub paint: Option<usize>,
 }
 
 /// Bounding box in user units, y down.
@@ -71,24 +75,58 @@ pub struct RenderTree {
     pub depth: f64,
     /// Tight box around every drawn outline and rule, unioned with the formula box.
     pub bbox: BBox,
+    /// The colours `\color` scopes resolved to, in first-use order. `Named` entries are
+    /// palette names for the backend to look up; `Rgba` entries are literals or CSS names.
+    pub paints: Vec<Paint>,
 }
 
 /// A [`Backend`] that records glyphs and rules into a [`RenderTree`].
 pub(crate) struct TreeBackend<'a, F> {
     fonts: Vec<&'a F>,
     tree: RenderTree,
+    palette: &'a [String],
+    /// Open colour scopes, innermost last: the paint index, or `None` while invisible.
+    stack: Vec<Scope>,
+    /// Colour names that are neither in the palette nor CSS names.
+    unknown: Vec<String>,
+}
+
+#[derive(Clone, Copy)]
+enum Scope {
+    Paint(usize),
+    Invisible,
 }
 
 impl<'a, F> TreeBackend<'a, F> {
-    pub(crate) fn new(fonts: Vec<&'a F>) -> Self {
+    pub(crate) fn new(fonts: Vec<&'a F>, palette: &'a [String]) -> Self {
         TreeBackend {
             fonts,
             tree: RenderTree::default(),
+            palette,
+            stack: Vec::new(),
+            unknown: Vec::new(),
         }
     }
 
-    pub(crate) fn finish(self) -> RenderTree {
-        self.tree
+    pub(crate) fn finish(self) -> Result<RenderTree, String> {
+        match self.unknown.into_iter().next() {
+            Some(name) => Err(name),
+            None => Ok(self.tree),
+        }
+    }
+
+    fn current(&self) -> Option<Scope> {
+        self.stack.last().copied()
+    }
+
+    fn paint_index(&mut self, paint: Paint) -> usize {
+        match self.tree.paints.iter().position(|p| *p == paint) {
+            Some(i) => i,
+            None => {
+                self.tree.paints.push(paint);
+                self.tree.paints.len() - 1
+            }
+        }
     }
 
     fn font_index(&mut self, font: &F) -> usize {
@@ -101,6 +139,11 @@ impl<'a, F> TreeBackend<'a, F> {
 
 impl<F: MathFont> FontBackend<F> for TreeBackend<'_, F> {
     fn symbol(&mut self, pos: Cursor, gid: GlyphId, scale: f64, font: &F) {
+        let paint = match self.current() {
+            Some(Scope::Invisible) => return, // `\phantom`: takes space, draws nothing
+            Some(Scope::Paint(i)) => Some(i),
+            None => None,
+        };
         let font = self.font_index(font);
         self.tree.glyphs.push(GlyphInstance {
             font,
@@ -108,22 +151,55 @@ impl<F: MathFont> FontBackend<F> for TreeBackend<'_, F> {
             x: pos.x,
             y: pos.y,
             size: scale,
+            paint,
         });
     }
 }
 
 impl<F> GraphicsBackend for TreeBackend<'_, F> {
     fn rule(&mut self, pos: Cursor, width: f64, height: f64) {
+        let paint = match self.current() {
+            Some(Scope::Invisible) => return,
+            Some(Scope::Paint(i)) => Some(i),
+            None => None,
+        };
         self.tree.rules.push(Rule {
             x: pos.x,
             y: pos.y,
             width,
             height,
+            paint,
         });
     }
-    // Colour is deliberately not part of the render tree (see NOTES.md, M1).
-    fn begin_color(&mut self, _color: RGBA) {}
-    fn end_color(&mut self) {}
+
+    /// Resolves the colour: palette names stay names (the backend decides what they
+    /// are), anything else must be a CSS name and becomes a literal. A fully transparent
+    /// literal opens an invisible scope.
+    fn begin_color(&mut self, color: &Paint) {
+        let resolved = match color {
+            Paint::Named(name) if self.palette.iter().any(|p| p.as_str() == &**name) => {
+                Paint::Named(name.clone())
+            }
+            Paint::Named(name) => match RGBA::from_name(name) {
+                Some(rgba) => Paint::Rgba(rgba),
+                None => {
+                    self.unknown.push(name.to_string());
+                    // Keep the scope balanced; the error surfaces in `finish`.
+                    Paint::Rgba(RGBA(0, 0, 0, 0xff))
+                }
+            },
+            Paint::Rgba(rgba) => Paint::Rgba(*rgba),
+        };
+        let scope = match resolved {
+            Paint::Rgba(RGBA(_, _, _, 0)) => Scope::Invisible,
+            paint => Scope::Paint(self.paint_index(paint)),
+        };
+        self.stack.push(scope);
+    }
+
+    fn end_color(&mut self) {
+        self.stack.pop();
+    }
 }
 
 impl<F: MathFont> Backend<F> for TreeBackend<'_, F> {}

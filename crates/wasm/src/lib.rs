@@ -16,6 +16,7 @@
 //!   "color": {"cmyk": [0,0,0,1]}, // or {"gray": g}, {"rgb": [r,g,b]},
 //!                                 // {"spot": {"name": "PANTONE 300 C", "tint": 1, "cmyk": [..]}}
 //!                                 // pdf: any; svg/png: gray or rgb only. Default: pdf 100% K, svg #000
+//!   "palette": {"accent": {"spot": {...}}},  // names for \color{accent}{...}; same shapes as color
 //!   "fonts": ["<base64>", 1234],  // per font: base64 string, or byte length into the font blob
 //!   "levels": [0, 0, 1, 1],       // font index per level: display, text, script, scriptscript
 //!   "scales": [1, 1, 0.7, 0.5]    // optional; default from the text font's MATH table
@@ -33,6 +34,7 @@ use latex_math_pdf::{to_pdf, Color, PdfOptions};
 use latex_math_png::{to_png, PngOptions};
 use latex_math_svg::{to_svg, SvgOptions};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 /// A parsed request.
 #[derive(Debug, Deserialize)]
@@ -57,6 +59,10 @@ pub struct Request {
     /// Fill colour. PDF takes any of these; SVG/PNG only `gray` and `rgb`.
     #[serde(default)]
     pub color: Option<ColorSpec>,
+    /// Named colours for `\color{name}{…}` in the formula, same shapes as `color`.
+    /// CSS names work without an entry; a palette name shadows a CSS name.
+    #[serde(default)]
+    pub palette: BTreeMap<String, ColorSpec>,
     /// Fonts, inline or by length into the blob.
     pub fonts: Vec<FontSource>,
     /// Font index per level.
@@ -201,14 +207,30 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
         "text" => Style::Text,
         other => return Err(format!("unknown style {other:?}")),
     };
+    let palette: Vec<(String, Color)> = request
+        .palette
+        .into_iter()
+        .map(|(n, c)| (n, Color::from(c)))
+        .collect();
     let options = Options {
         font_size: request.font_size,
         style,
+        palette: palette.iter().map(|(n, _)| n.clone()).collect(),
     };
     let tree =
         latex_math_core::render(&request.tex, &set, &options).map_err(|e| format!("{e:?}"))?;
     let refs: Vec<&Font<'_>> = fonts.iter().collect();
     let color: Option<Color> = request.color.map(Color::from);
+    let svg_palette = || -> Result<BTreeMap<String, String>, String> {
+        palette
+            .iter()
+            .map(|(name, c)| {
+                svg_fill(Some(c))
+                    .map(|fill| (name.clone(), fill))
+                    .map_err(|e| format!("{e} (palette entry {name:?})"))
+            })
+            .collect()
+    };
     match request.format.as_str() {
         "svg" => to_svg(
             &tree,
@@ -216,6 +238,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &SvgOptions {
                 padding: request.padding,
                 fill: svg_fill(color.as_ref())?,
+                palette: svg_palette()?,
                 ..SvgOptions::default()
             },
         )
@@ -227,6 +250,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &PdfOptions {
                 padding: request.padding,
                 color: color.unwrap_or_default(),
+                palette: palette.iter().cloned().collect(),
             },
         )
         .map_err(|e| e.to_string()),
@@ -236,6 +260,7 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             &SvgOptions {
                 padding: request.padding,
                 fill: svg_fill(color.as_ref())?,
+                palette: svg_palette()?,
                 ..SvgOptions::default()
             },
             &PngOptions {

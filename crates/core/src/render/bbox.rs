@@ -57,7 +57,7 @@ impl GraphicsBackend for BBoxBackend {
         ));
     }
 
-    fn begin_color(&mut self, _color: super::RGBA) {}
+    fn begin_color(&mut self, _color: &super::Paint) {}
     fn end_color(&mut self) {}
 }
 

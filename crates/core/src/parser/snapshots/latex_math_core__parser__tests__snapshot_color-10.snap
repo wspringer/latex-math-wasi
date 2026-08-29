@@ -1,9 +1,39 @@
 ---
-source: src/parser/mod.rs
+source: crates/core/src/parser/mod.rs
 expression: "parse(r\"\\color red{1}\")"
 ---
-Err(
-    UnrecognizedColor(
-        "r",
-    ),
+Ok(
+    [
+        Color(
+            Color {
+                color: Named(
+                    "r",
+                ),
+                inner: [
+                    Symbol(
+                        Symbol {
+                            codepoint: '𝑒',
+                            atom_type: Alpha,
+                        },
+                    ),
+                ],
+            },
+        ),
+        Symbol(
+            Symbol {
+                codepoint: '𝑑',
+                atom_type: Alpha,
+            },
+        ),
+        Group(
+            [
+                Symbol(
+                    Symbol {
+                        codepoint: '1',
+                        atom_type: Alpha,
+                    },
+                ),
+            ],
+        ),
+    ],
 )

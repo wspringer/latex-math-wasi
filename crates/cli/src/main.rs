@@ -28,6 +28,8 @@ options:
   --color SPEC       fill colour. pdf: gray:K | rgb:R,G,B | cmyk:C,M,Y,K |
                      spot:NAME:TINT:C,M,Y,K (components 0-1; default cmyk:0,0,0,1).
                      svg/png: gray:K, rgb:R,G,B or #rrggbb (default #000)
+  --define NAME=SPEC palette entry: \\color{NAME}{...} in the formula uses SPEC (same
+                     syntax as --color). Repeatable. CSS colour names work without it.
   -o, --output FILE  write here instead of stdout
   -h, --help
 ";
@@ -40,6 +42,7 @@ struct Args {
     padding: f64,
     scale: f64,
     color: Option<String>,
+    defines: Vec<String>,
     output: Option<String>,
     formula: Option<String>,
     levels: Option<[usize; 4]>,
@@ -54,6 +57,7 @@ fn parse_args() -> Result<Args, String> {
         padding: 0.0,
         scale: 1.0,
         color: None,
+        defines: Vec::new(),
         output: None,
         formula: None,
         levels: None,
@@ -77,6 +81,7 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|_| "--padding must be a number".to_string())?
             }
             "--color" => args.color = Some(value("--color", &mut it)?),
+            "--define" => args.defines.push(value("--define", &mut it)?),
             "--scale" => {
                 args.scale = value("--scale", &mut it)?
                     .parse()
@@ -122,7 +127,8 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn run() -> Result<(), String> {
-    let args = parse_args()?;
+    // Usage is only helpful for argument errors; render errors stand on their own.
+    let args = parse_args().map_err(|e| format!("{e}\n\n{USAGE}"))?;
     let formula = match args.formula {
         Some(f) => f,
         None => {
@@ -146,9 +152,20 @@ fn run() -> Result<(), String> {
         .map(|(b, p)| Font::parse(b).map_err(|e| format!("{p}: {e}")))
         .collect::<Result<_, _>>()?;
 
+    let mut palette: Vec<(String, Color)> = Vec::new();
+    for d in &args.defines {
+        let (name, spec) = d
+            .split_once('=')
+            .ok_or_else(|| format!("--define: expected NAME=SPEC, got {d:?}"))?;
+        if name.is_empty() {
+            return Err(format!("--define: empty name in {d:?}"));
+        }
+        palette.push((name.to_string(), parse_color(spec)?));
+    }
     let options = Options {
         font_size: args.size,
         style: args.style,
+        palette: palette.iter().map(|(n, _)| n.clone()).collect(),
     };
     let levels = args.levels.unwrap_or(match fonts.len() {
         1 => [0, 0, 0, 0],
@@ -166,6 +183,7 @@ fn run() -> Result<(), String> {
             let svg_options = SvgOptions {
                 padding: args.padding,
                 fill: svg_fill(color.as_ref())?,
+                palette: svg_palette(&palette)?,
                 ..SvgOptions::default()
             };
             to_svg(&tree, &refs, &svg_options)
@@ -176,6 +194,7 @@ fn run() -> Result<(), String> {
             let pdf_options = PdfOptions {
                 padding: args.padding,
                 color: color.clone().unwrap_or_default(),
+                palette: palette.iter().cloned().collect(),
             };
             to_pdf(&tree, &refs, &pdf_options).map_err(|e| e.to_string())?
         }
@@ -183,6 +202,7 @@ fn run() -> Result<(), String> {
             let svg_options = SvgOptions {
                 padding: args.padding,
                 fill: svg_fill(color.as_ref())?,
+                palette: svg_palette(&palette)?,
                 ..SvgOptions::default()
             };
             let png_options = PngOptions {
@@ -277,6 +297,20 @@ fn svg_fill(color: Option<&Color>) -> Result<String, String> {
     }
 }
 
+/// The palette in SVG terms; every entry must be representable in sRGB.
+fn svg_palette(
+    palette: &[(String, Color)],
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    palette
+        .iter()
+        .map(|(name, color)| {
+            svg_fill(Some(color))
+                .map(|fill| (name.clone(), fill))
+                .map_err(|e| format!("{e} (palette entry {name:?})"))
+        })
+        .collect()
+}
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -285,7 +319,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(msg) => {
-            eprintln!("error: {msg}\n\n{USAGE}");
+            eprintln!("error: {msg}");
             ExitCode::FAILURE
         }
     }

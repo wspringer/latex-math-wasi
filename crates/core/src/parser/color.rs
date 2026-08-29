@@ -8,6 +8,17 @@ use std::str::FromStr;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct RGBA(pub u8, pub u8, pub u8, pub u8);
 
+/// A colour as written in the source: an RGBA literal (`\red{…}`, `\phantom{…}`), or a
+/// name from `\color{name}{…}` that the caller resolves — against its palette first, then
+/// the CSS colour names.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Paint {
+    /// A literal colour.
+    Rgba(RGBA),
+    /// A colour name, resolved at render time.
+    Named(Box<str>),
+}
+
 /// Type of errors encountered while parsing the color's name
 pub enum ColorParseError {
     /// Color does not start with # but its name is not the ASCII name of a CSS color

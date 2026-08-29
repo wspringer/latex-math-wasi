@@ -1,16 +1,13 @@
 ---
-source: src/parser/mod.rs
+source: crates/core/src/parser/mod.rs
 expression: "parse(r\"\\color{cyan}{1+1}\")"
 ---
 Ok(
     [
         Color(
             Color {
-                color: RGBA(
-                    0,
-                    255,
-                    255,
-                    255,
+                color: Named(
+                    "cyan",
                 ),
                 inner: [
                     Symbol(

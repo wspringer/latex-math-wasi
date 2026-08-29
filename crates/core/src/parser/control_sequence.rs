@@ -4,7 +4,7 @@ use crate::{
     dimensions::{units::Em, AnyUnit, Unit},
     font::{Family, Weight},
     layout::{constants, Style as LayoutStyle},
-    parser::color::RGBA,
+    parser::color::{Paint, RGBA},
     parser::{
         nodes::{BarThickness, MathStyle},
         symbols::Symbol,
@@ -463,7 +463,7 @@ impl SpaceKind {
     }
 }
 
-pub fn parse_color<'a, I: Iterator<Item = TexToken<'a>>>(token_iter: I) -> ParseResult<RGBA> {
+pub fn parse_color<'a, I: Iterator<Item = TexToken<'a>>>(token_iter: I) -> ParseResult<Paint> {
     let mut color_name = String::with_capacity("#11223344".len()); // #rrggbbaa, preparing for the worst case
     for token in token_iter {
         match token {
@@ -476,8 +476,10 @@ pub fn parse_color<'a, I: Iterator<Item = TexToken<'a>>>(token_iter: I) -> Parse
             // _ => todo!()
         }
     }
-    let color: RGBA = color_name
-        .parse()
-        .map_err(|_| ParseError::UnrecognizedColor(color_name.into_boxed_str()))?;
-    Ok(color)
+    // Names are resolved at render time: the caller's palette first (so `\color{accent}`
+    // can be a CMYK or spot colour), then the CSS names.
+    if color_name.is_empty() {
+        return Err(ParseError::UnrecognizedColor(color_name.into_boxed_str()));
+    }
+    Ok(Paint::Named(color_name.into_boxed_str()))
 }

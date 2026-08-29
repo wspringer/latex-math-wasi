@@ -271,7 +271,10 @@ impl<'a, I: Iterator<Item = TexToken<'a>>> Parser<'a, I> {
                         ColorLit(color) => {
                             let inner =
                                 self.parse_control_seq_argument_as_nodes(control_sequence_name)?;
-                            results.push(ParseNode::Color(nodes::Color { color, inner }));
+                            results.push(ParseNode::Color(nodes::Color {
+                                color: color::Paint::Rgba(color),
+                                inner,
+                            }));
                         }
                         StyleChange {
                             family,

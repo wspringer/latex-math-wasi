@@ -25,6 +25,11 @@ Colour: `--color` (request `"color"`) sets the fill. PDF takes `gray:K`, `rgb:R,
 a CMYK alternate — InDesign shows it as a swatch); default is 100 % K. SVG/PNG are sRGB
 only: `gray`, `rgb` or `#rrggbb`.
 
+Colour inside a formula: `\color{name}{…}` (and `\red`, `\blue`, `\gray`, `\phantom`).
+CSS names work as-is; anything else must be defined with `--define name=SPEC` (request
+`"palette": {"name": {...}}`) — that is how part of a formula gets a CMYK or spot colour:
+the name is chosen in the source, the ink by the caller. Undefined names are an error.
+
 ```
 cargo build --release -p latex-math-wasi --target wasm32-wasip1
 wasmtime run target/wasm32-wasip1/release/latex-math-wasi.wasm < request.json > out.svg

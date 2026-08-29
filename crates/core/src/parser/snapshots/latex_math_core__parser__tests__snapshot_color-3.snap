@@ -1,16 +1,18 @@
 ---
-source: src/parser/mod.rs
+source: crates/core/src/parser/mod.rs
 expression: "parse(r\"\\red{1}\")"
 ---
 Ok(
     [
         Color(
             Color {
-                color: RGBA(
-                    255,
-                    0,
-                    0,
-                    255,
+                color: Rgba(
+                    RGBA(
+                        255,
+                        0,
+                        0,
+                        255,
+                    ),
                 ),
                 inner: [
                     Symbol(

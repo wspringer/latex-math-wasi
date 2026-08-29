@@ -263,7 +263,7 @@ pub fn color<'a, F>(layout: Layout<'a, F>, color: &nodes::Color) -> LayoutNode<'
         height: layout.height,
         depth: layout.depth,
         node: LayoutVariant::Color(ColorChange {
-            color: color.color,
+            color: color.color.clone(),
             inner: layout.contents,
         }),
     }

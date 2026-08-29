@@ -28,7 +28,7 @@ use crate::dimensions::units::{Em, Px};
 use crate::dimensions::Unit;
 use crate::font::common::{GlyphId, ScriptLevel};
 use crate::font::{FontMetricsCache, MathFont};
-use crate::parser::color::RGBA;
+use crate::parser::color::Paint;
 use crate::render::bbox::BBoxBackend;
 use crate::Renderer;
 use std::collections::BTreeMap;
@@ -296,7 +296,7 @@ impl<F> Clone for LayoutVariant<'_, F> {
 /// All children of this node will use the [ColorChange::color] as a fill color
 pub struct ColorChange<'f, F> {
     /// Color to use
-    pub color: RGBA,
+    pub color: Paint,
     /// Children of the given node
     pub inner: Vec<LayoutNode<'f, F>>,
 }
@@ -304,7 +304,7 @@ pub struct ColorChange<'f, F> {
 impl<F> Clone for ColorChange<'_, F> {
     fn clone(&self) -> Self {
         Self {
-            color: self.color,
+            color: self.color.clone(),
             inner: self.inner.clone(),
         }
     }

@@ -1,6 +1,6 @@
 //! Nodes are the output of parsing.
 
-use super::color::RGBA;
+use super::color::Paint;
 use super::symbols::Symbol;
 use crate::dimensions::AnyUnit;
 use crate::font::TexSymbolType;
@@ -296,7 +296,7 @@ pub struct GenFraction {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Color {
     /// new color for the children nodes
-    pub color: RGBA,
+    pub color: Paint,
     /// children nodes
     pub inner: Vec<ParseNode>,
 }

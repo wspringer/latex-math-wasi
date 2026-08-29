@@ -47,6 +47,9 @@ pub enum Error {
     Layout(LayoutError),
     /// a font set with no fonts, or a level pointing at a font index that does not exist
     InvalidFontSet(usize),
+    /// `\color{name}` with a name that is neither in [`crate::Options::palette`] nor a CSS
+    /// colour name
+    UnknownColor(String),
 }
 impl From<ParseError> for Error {
     fn from(e: ParseError) -> Self {

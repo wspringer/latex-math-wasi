@@ -501,3 +501,37 @@ SVG/PNG accept gray/rgb (mapped to `#rrggbb`) and refuse cmyk/spot with a clear 
 rather than converting silently — the whole point is that the numbers stay the numbers.
 Not done: ICC-based spaces and PDF/X output intents; InDesign does not need them for a
 placed graphic.
+
+## Colour scopes and the palette (2026-08-29)
+
+ReX's parser already handled `\color{css-name}{…}`, `\red`, `\blue`, `\gray` and
+`\phantom` (a colour with alpha 0), and the layout carried the scopes — but M1's tree
+backend dropped them ("colour is not part of the render tree"). Two consequences the user
+ran into: everything was one colour, and `\phantom{x}` *drew* the x. Both fixed.
+
+Design, driven by print: CSS names are useless to InDesign, so `\color{accent}{…}` is a
+*name* that the caller defines — as CMYK or a spot colour for PDF, as an sRGB value for
+SVG/PNG. Pieces:
+
+- `parser::color::Paint { Rgba(RGBA), Named(Box<str>) }` replaces bare `RGBA` through
+  parser → layout → `Backend::begin_color(&Paint)`. `\color{x}` now parses to
+  `Named("x")` unconditionally (the ten colour snapshots changed accordingly; three that
+  were parse errors for unknown names are now trees); resolution happens at render.
+- `Options.palette: Vec<String>` names the caller's colours. The tree backend resolves
+  `Named`: palette → stays a name; else CSS → `Rgba` literal; else
+  `Error::UnknownColor`. A palette name shadows a CSS name. Alpha 0 opens an invisible
+  scope: glyphs and rules are not emitted but layout is untouched (`\phantom` works).
+- `RenderTree.paints: Vec<Paint>` (first-use order, deduped) and `paint: Option<usize>`
+  on every glyph and rule; `None` is the document colour.
+- SVG: `SvgOptions.palette: BTreeMap<String, String>` (any SVG paint); per-glyph `fill`
+  attribute on `<use>`/`<rect>`, `fill-opacity` for translucent literals. Uncoloured
+  output is byte-identical to before; the one golden that changed is `quartic`, whose
+  `\gray{Quartic}` label is now actually gray.
+- PDF: `PdfOptions.palette: BTreeMap<String, Color>`; a fill operator is emitted whenever
+  the paint changes (legal inside `BT…ET`), CSS/literal colours become `DeviceRGB`,
+  distinct spot colours get one Separation resource each (`CS0`, `CS1`, …) and reuse it
+  across scopes. Partial alpha is ignored in PDF (would need an ExtGState; no use case).
+- CLI `--define NAME=SPEC` (repeatable, `--color` syntax); request `"palette"`.
+
+Also: the CLI no longer dumps the usage text after a render error — only after an
+argument error.
