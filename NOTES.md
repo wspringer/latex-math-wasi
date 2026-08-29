@@ -452,3 +452,25 @@ wasip1 1,675,834 bytes) — tiny-skia is most of it. Acceptable for an npm packa
 ever matters, a direct RenderTree → tiny-skia backend would drop usvg (~300 kB). The "not blank" test compares the PNG's byte length with that of a
 transparent PNG of the same size — cheap, and enough: an image with glyphs never
 compresses to the empty image's size.
+
+## Baseline metrics (2026-08-29)
+
+For the MCP to be a drop-in for `math-svg-mcp`, the model needs what that server
+returns: width, height and depth (distance from the baseline to the bottom edge), so it
+can set `vertical-align` for inline expressions. MathJax gets there by measuring in `ex`
+with a guessed `xHeightRatio`; we have the real font, so this is exact.
+
+- `RenderTree::image_box(padding)` is now the single definition of the document
+  rectangle (bbox + padding, baseline at tree `y = 0`); SVG and PDF both size from it,
+  and PNG inherits it through the SVG. Before, each backend computed the same four numbers
+  on its own.
+- `latex_math_core::metrics(tree, fonts, options, padding)` → `Metrics { width, height,
+  depth, ascent, em, ex }`, `ex` from the *text-style* font's `OS/2 sxHeight` (with an
+  optical-size set that is the Regular cut, which is what surrounding text would use).
+  `Metrics::to_json()` is hand-formatted at three decimals so the CLI and both wasm builds
+  emit identical bytes (`check-wasm.sh` now compares `metrics` too).
+- New format `metrics` in the CLI and the request schema — a second call, deterministic
+  and a few milliseconds; simpler than an envelope around the PDF/PNG bytes.
+- The SVG root gets `style="vertical-align:-<depth>px"`, MathJax's convention, so the SVG
+  alone is enough for HTML embedding. All 54 goldens changed by exactly that one header
+  line; rasters are unaffected (same viewBox, same content).

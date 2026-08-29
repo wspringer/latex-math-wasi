@@ -15,6 +15,11 @@ Crates: `core` (parser + OpenType MATH layout → render tree), `svg`, `pdf` (re
 subsetted CID fonts), `png` (the SVG rasterized with resvg; `--scale` for density), `cli`,
 `wasm` (JSON request → bytes, C ABI for the browser), `wasi` (`wasm32-wasip1` command: request on stdin, bytes on stdout).
 
+Inline placement: `--format metrics` (request `"format": "metrics"`) returns
+`{"width","height","depth","ascent","em","ex"}` in user units for the same padding —
+`depth` is baseline to bottom edge, so an inline image sits right with
+`vertical-align: -depth`. The SVG carries the same value in its root `style`.
+
 ```
 cargo build --release -p latex-math-wasi --target wasm32-wasip1
 wasmtime run target/wasm32-wasip1/release/latex-math-wasi.wasm < request.json > out.svg

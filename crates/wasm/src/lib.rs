@@ -8,7 +8,7 @@
 //! ```json
 //! {
 //!   "tex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
-//!   "format": "svg",              // or "pdf", "png"
+//!   "format": "svg",              // or "pdf", "png", "metrics" (JSON with the baseline)
 //!   "font_size": 16,              // user units per em (SVG px / PDF pt); default 16
 //!   "style": "display",           // or "text"; default display
 //!   "padding": 0,                 // user units around the bbox; default 0
@@ -36,7 +36,7 @@ use serde::Deserialize;
 pub struct Request {
     /// LaTeX math fragment.
     pub tex: String,
-    /// `"svg"`, `"pdf"` or `"png"`.
+    /// `"svg"`, `"pdf"`, `"png"`, or `"metrics"` (JSON: width/height/depth/ascent/em/ex).
     #[serde(default = "default_format")]
     pub format: String,
     /// User units per em.
@@ -179,6 +179,11 @@ pub fn handle(request_json: &[u8], blob: &[u8]) -> Result<Vec<u8>, String> {
             },
         )
         .map_err(|e| e.to_string()),
+        "metrics" => Ok(
+            latex_math_core::metrics(&tree, &set, &options, request.padding)
+                .to_json()
+                .into_bytes(),
+        ),
         other => Err(format!("unknown format {other:?}")),
     }
 }

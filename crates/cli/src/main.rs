@@ -19,7 +19,8 @@ options:
                      three are [display+text, script, scriptscript]; four are
                      [display, text, script, scriptscript].
   --levels D,T,S,SS  explicit font index (0-based, into the --font list) per level
-  --format svg|pdf|png  output format (default svg)
+  --format FMT       svg, pdf, png, or metrics (JSON: width, height, depth, ascent,
+                     em, ex in user units; default svg)
   --size N           em size in user units (default 16)
   --style display|text
   --padding N        space around the formula, user units (default 0)
@@ -180,6 +181,9 @@ fn run() -> Result<(), String> {
             };
             to_png(&tree, &refs, &svg_options, &png_options).map_err(|e| e.to_string())?
         }
+        "metrics" => latex_math_core::metrics(&tree, &set, &options, args.padding)
+            .to_json()
+            .into_bytes(),
         other => return Err(format!("unknown format {other}")),
     };
 

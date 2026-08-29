@@ -127,3 +127,41 @@ impl<F> GraphicsBackend for TreeBackend<'_, F> {
 }
 
 impl<F: MathFont> Backend<F> for TreeBackend<'_, F> {}
+
+/// The rectangle an output document covers — the tight [`BBox`] plus `padding` on every
+/// side — and where the baseline sits inside it. User units; y grows downwards and the
+/// baseline is `y = 0` in tree coordinates. Every backend (SVG, PDF, PNG) sizes its
+/// document from this, so their boxes agree.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImageBox {
+    /// Left edge, tree coordinates.
+    pub x: f64,
+    /// Top edge, tree coordinates.
+    pub y: f64,
+    /// Total width.
+    pub width: f64,
+    /// Total height.
+    pub height: f64,
+    /// Distance from the baseline down to the bottom edge.
+    pub depth: f64,
+}
+
+impl ImageBox {
+    /// Distance from the top edge down to the baseline.
+    pub fn ascent(&self) -> f64 {
+        self.height - self.depth
+    }
+}
+
+impl RenderTree {
+    /// The document rectangle for this tree with `padding` user units around the bbox.
+    pub fn image_box(&self, padding: f64) -> ImageBox {
+        ImageBox {
+            x: self.bbox.x_min - padding,
+            y: self.bbox.y_min - padding,
+            width: self.bbox.width() + 2.0 * padding,
+            height: self.bbox.height() + 2.0 * padding,
+            depth: self.bbox.y_max + padding,
+        }
+    }
+}

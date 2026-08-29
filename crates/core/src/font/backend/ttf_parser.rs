@@ -73,6 +73,13 @@ impl<'a> TtfMathFont<'a> {
     pub fn em_per_font_unit(&self) -> f64 {
         self.font_units_to_em
     }
+
+    /// x-height in em, from `OS/2 sxHeight`, if the font records one.
+    pub fn x_height_em(&self) -> Option<f64> {
+        self.font
+            .x_height()
+            .map(|v| f64::from(v) * self.font_units_to_em)
+    }
 }
 
 impl TtfMathFont<'_> {

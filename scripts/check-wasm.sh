@@ -16,7 +16,7 @@ cargo build -q --locked --release -p latex-math-wasm --target wasm32-unknown-unk
 B64=$(base64 < "$FONT" | tr -d '\n')
 TEX_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$TEX")
 
-for fmt in svg pdf png; do
+for fmt in svg pdf png metrics; do
   target/debug/latex-math --font "$FONT" --format "$fmt" --padding 2 "$TEX" > "$OUT/native.$fmt"
 
   printf '{"tex": %s, "format": "%s", "font_size": 16, "padding": 2, "fonts": ["%s"]}' \

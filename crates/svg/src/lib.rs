@@ -64,16 +64,16 @@ pub fn to_svg(
     let p = options.precision;
     let fmt = |v: f64| format_fixed(v, p);
 
-    let x = tree.bbox.x_min - options.padding;
-    let y = tree.bbox.y_min - options.padding;
-    let w = tree.bbox.width() + 2.0 * options.padding;
-    let h = tree.bbox.height() + 2.0 * options.padding;
+    let b = tree.image_box(options.padding);
+    let (x, y, w, h) = (b.x, b.y, b.width, b.height);
 
+    // `vertical-align` is the MathJax convention for inline placement: the baseline sits
+    // `depth` user units above the bottom edge, and user units are px in HTML.
     let mut out = String::new();
     writeln!(
         out,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="{} {} {} {}" width="{}" height="{}">"#,
-        fmt(x), fmt(y), fmt(w), fmt(h), fmt(w), fmt(h)
+        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="{} {} {} {}" width="{}" height="{}" style="vertical-align:-{}px">"#,
+        fmt(x), fmt(y), fmt(w), fmt(h), fmt(w), fmt(h), fmt(b.depth)
     )
     .unwrap();
 

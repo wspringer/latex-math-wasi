@@ -62,11 +62,12 @@ struct PageMap {
 
 impl PageMap {
     fn new(tree: &RenderTree, padding: f64) -> Self {
+        let b = tree.image_box(padding);
         PageMap {
-            x_off: padding - tree.bbox.x_min,
-            y_top: tree.bbox.y_max + padding,
-            width: tree.bbox.width() + 2.0 * padding,
-            height: tree.bbox.height() + 2.0 * padding,
+            x_off: -b.x,
+            y_top: b.y + b.height,
+            width: b.width,
+            height: b.height,
         }
     }
     fn x(&self, x: f64) -> f64 {

@@ -22,7 +22,7 @@ pub mod tree;
 pub use error::Error;
 pub use font::backend::ttf_parser::TtfMathFont as Font;
 pub use layout::Style;
-pub use tree::{BBox, GlyphInstance, RenderTree, Rule};
+pub use tree::{BBox, GlyphInstance, ImageBox, RenderTree, Rule};
 
 use layout::engine::LayoutBuilder;
 use render::Renderer;
@@ -207,5 +207,59 @@ mod tests {
         assert!(tree.glyphs.iter().all(|g| g.font == 0));
         // numerator above the baseline, denominator below
         assert!(tree.glyphs[0].y < 0.0 && tree.glyphs[1].y > 0.0);
+    }
+}
+
+/// What a consumer needs to place an output document inline with text: the document's
+/// box and where its baseline is, plus the em and ex of the text font at the rendered
+/// size, so the numbers can be re-expressed in font-relative units. All in user units.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Metrics {
+    /// Document width.
+    pub width: f64,
+    /// Document height (`ascent + depth`).
+    pub height: f64,
+    /// Baseline to bottom edge. Place the image with `vertical-align: -depth`.
+    pub depth: f64,
+    /// Top edge to baseline.
+    pub ascent: f64,
+    /// User units per em (`Options::font_size`).
+    pub em: f64,
+    /// x-height of the text-style font at that size, if the font records one.
+    pub ex: Option<f64>,
+}
+
+impl Metrics {
+    /// Fixed-precision JSON, three decimals, keys in a fixed order — byte-identical across
+    /// the CLI and the wasm builds. `ex` is `null` when the font has no x-height.
+    pub fn to_json(&self) -> String {
+        let ex = match self.ex {
+            Some(v) => format!("{v:.3}"),
+            None => "null".to_string(),
+        };
+        format!(
+            r#"{{"width":{:.3},"height":{:.3},"depth":{:.3},"ascent":{:.3},"em":{:.3},"ex":{ex}}}"#,
+            self.width, self.height, self.depth, self.ascent, self.em
+        )
+    }
+}
+
+/// Metrics of `tree` as rendered with `fonts` and `options`, for a document with
+/// `padding` user units around the bbox (the same `padding` given to the backends).
+pub fn metrics(
+    tree: &RenderTree,
+    fonts: &FontSet<'_, '_>,
+    options: &Options,
+    padding: f64,
+) -> Metrics {
+    let b = tree.image_box(padding);
+    let text_font = &fonts.fonts()[fonts.levels()[1]];
+    Metrics {
+        width: b.width,
+        height: b.height,
+        depth: b.depth,
+        ascent: b.ascent(),
+        em: options.font_size,
+        ex: text_font.x_height_em().map(|x| x * options.font_size),
     }
 }
