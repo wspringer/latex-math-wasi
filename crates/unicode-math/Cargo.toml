@@ -12,4 +12,4 @@ description = "LaTeX command name -> Unicode math symbol table, generated at bui
 
 [build-dependencies]
 regex = "1"
-nom = "7.1"
+nom = "8.0"
