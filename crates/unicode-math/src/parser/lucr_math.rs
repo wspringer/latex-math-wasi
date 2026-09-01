@@ -1,3 +1,4 @@
+use nom::Parser;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while_m_n},
@@ -103,24 +104,24 @@ pub struct CrossRef<'a> {
 }
 
 pub fn parse_file(input: &str) -> IResult<&str, Vec<Line<'_>>> {
-    let (input, _) = many0(parse_comment)(input)?;
-    let (input, (lines, _)) = many_till(parse_line, eof)(input)?;
+    let (input, _) = many0(parse_comment).parse(input)?;
+    let (input, (lines, _)) = many_till(parse_line, eof).parse(input)?;
 
     Ok((input, lines))
 }
 
 pub fn parse_line(input: &str) -> IResult<&str, Line<'_>> {
     let (input, codepoint) = parse_codepoint(input)?;
-    let (input, _) = tag("^")(input)?;
+    let (input, _) = tag("^").parse(input)?;
     let (input, character) = parse_character(input)?;
     let (input, latex) = parse_string_till_hat(input)?;
     let (input, unicode_math) = parse_string_till_hat(input)?;
     let (input, unicode_math_char_class) = parse_unicode_math_char_class(input)?;
     let (input, tex_math_category) = parse_tex_math_category(input)?;
     let (input, (providers, conflicts)) = parse_providers_and_conflicts(input)?;
-    let (input, _) = tag("^")(input)?;
-    let (input, cross_ref) = separated_list0(tag(", "), parse_cross_ref)(input)?;
-    let (input, _) = opt(tag(", "))(input)?;
+    let (input, _) = tag("^").parse(input)?;
+    let (input, cross_ref) = separated_list0(tag(", "), parse_cross_ref).parse(input)?;
+    let (input, _) = opt(tag(", ")).parse(input)?;
     let (description, input) = input.split_once('\n').unwrap_or(("", ""));
 
     let line = Line {
@@ -145,7 +146,8 @@ pub fn parse_cross_ref_category(input: &str) -> IResult<&str, CrossRefCategory> 
         map_res(tag("="), |_| Ok::<_, ()>(CrossRefCategory::Alias)),
         map_res(tag("x"), |_| Ok::<_, ()>(CrossRefCategory::FalseFriend)),
         map_res(tag("t"), |_| Ok::<_, ()>(CrossRefCategory::TextMode)),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 pub fn parse_cross_ref(input: &str) -> IResult<&str, CrossRef<'_>> {
@@ -162,11 +164,12 @@ pub fn parse_cross_ref(input: &str) -> IResult<&str, CrossRef<'_>> {
     let input = &input[command.len()..];
     let (input, providers_and_conflicters) = opt(|input| {
         let (input, _) = space0(input)?;
-        let (input, _) = tag("(")(input)?;
+        let (input, _) = tag("(").parse(input)?;
         let (input, providers_and_conflicters) = parse_providers_and_conflicts(input)?;
-        let (input, _) = tag(")")(input)?;
+        let (input, _) = tag(")").parse(input)?;
         Ok((input, providers_and_conflicters))
-    })(input)?;
+    })
+    .parse(input)?;
     let (providers, conflicters) = providers_and_conflicters.unwrap_or_default();
 
     Ok((
@@ -182,7 +185,7 @@ pub fn parse_cross_ref(input: &str) -> IResult<&str, CrossRef<'_>> {
 
 pub fn parse_providers_and_conflicts(input: &str) -> IResult<&str, (Vec<&str>, Vec<&str>)> {
     let (input, providers_and_conflicters) =
-        separated_list0(space1, parse_provider_or_conflict)(input)?;
+        separated_list0(space1, parse_provider_or_conflict).parse(input)?;
 
     let providers = providers_and_conflicters
         .iter()
@@ -214,7 +217,7 @@ pub fn parse_providers_and_conflicts(input: &str) -> IResult<&str, (Vec<&str>, V
 }
 
 pub fn parse_provider_or_conflict(input: &str) -> IResult<&str, (bool, &str)> {
-    let (input, tag_conflict) = opt(tag("-"))(input)?;
+    let (input, tag_conflict) = opt(tag("-")).parse(input)?;
     let conflict = tag_conflict.is_some();
     let (input, package) = alpha1(input)?;
     Ok((input, (conflict, package)))
@@ -229,7 +232,8 @@ pub fn parse_unicode_math_char_class(input: &str) -> IResult<&str, Option<Unicod
         } else {
             Ok(None)
         }
-    })(input)?;
+    })
+    .parse(input)?;
     Ok((input, result))
 }
 
@@ -242,7 +246,8 @@ pub fn parse_tex_math_category(input: &str) -> IResult<&str, Option<TexSymbolTyp
         } else {
             Ok(None)
         }
-    })(input)?;
+    })
+    .parse(input)?;
     Ok((input, result))
 }
 
@@ -278,11 +283,12 @@ pub fn parse_codepoint(input: &str) -> IResult<&str, u32> {
     map_res(
         take_while_m_n(N_DIGITS_CODEPOINT, N_DIGITS_CODEPOINT, is_hex_digit),
         from_hex,
-    )(input)
+    )
+    .parse(input)
 }
 
 pub fn parse_comment(input: &str) -> IResult<&str, ()> {
-    let (input, _) = tag("#")(input)?;
+    let (input, _) = tag("#").parse(input)?;
     Ok(match input.split_once('\n') {
         Some((_, rest)) => (rest, ()),
         None => ("", ()),
