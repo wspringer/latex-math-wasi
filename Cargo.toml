@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/unicode-math", "crates/core", "crates/svg", "crates/pdf", "crates/png", "crates/cli", "crates/wasm", "crates/wasi"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/wspringer/latex-math-wasi"
