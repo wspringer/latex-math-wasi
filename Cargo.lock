@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "latex-math-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "latex-math-core",
  "latex-math-pdf",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "latex-math-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "insta",
  "ttf-parser",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "latex-math-pdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "latex-math-core",
  "latex-math-svg",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "latex-math-png"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "latex-math-core",
  "latex-math-svg",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "latex-math-svg"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "latex-math-core",
  "resvg",
@@ -328,14 +328,14 @@ dependencies = [
 
 [[package]]
 name = "latex-math-wasi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "latex-math-wasm",
 ]
 
 [[package]]
 name = "latex-math-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "latex-math-core",
