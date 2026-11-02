@@ -16,8 +16,8 @@ latex-math-core.workspace = true
 latex-math-svg.workspace = true
 # No default features: `text` would pull in fontdb and system font discovery, and
 # `raster-images` decoders; our SVG is paths and rects only.
-resvg = { version = "0.48", default-features = false }
+resvg = { version = "0.49", default-features = false }
 
 [dev-dependencies]
 # Only for the "not blank" comparison in tests; the crate itself never decodes PNGs.
-resvg = { version = "0.48", default-features = false }
+resvg = { version = "0.49", default-features = false }

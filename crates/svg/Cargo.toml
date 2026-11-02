@@ -16,4 +16,4 @@ latex-math-core.workspace = true
 ttf-parser.workspace = true
 
 [dev-dependencies]
-resvg = "0.48"
+resvg = "0.49"
